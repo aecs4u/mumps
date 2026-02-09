@@ -133,3 +133,7 @@ gmon.out
 *.gcov
 *.gcda
 *.gcno
+
+# Template-generated source files
+/src/generated/
+**/generated/
