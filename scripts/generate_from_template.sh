@@ -12,6 +12,8 @@
 #                            (real-valued type, even for complex builds)
 #   @MUMPS_REAL_CONV@     → real, dble, real, dble
 #                            (Fortran intrinsic for real-valued conversion)
+#   @MUMPS_REAL_LIT@      → E0, D0, E0, D0
+#                            (Fortran real literal exponent suffix)
 #
 
 set -euo pipefail
@@ -63,6 +65,13 @@ declare -A REAL_CONVS=(
     [z]="dble"
 )
 
+declare -A REAL_LITS=(
+    [s]="E0"
+    [d]="D0"
+    [c]="E0"
+    [z]="D0"
+)
+
 # Generate for each precision
 for prec in s d c z; do
     PREFIX="${PREFIXES[$prec]}"
@@ -70,6 +79,7 @@ for prec in s d c z; do
     TYPE="${TYPES[$prec]}"
     REAL_TYPE="${REAL_TYPES[$prec]}"
     REAL_CONV="${REAL_CONVS[$prec]}"
+    REAL_LIT="${REAL_LITS[$prec]}"
     OUTPUT_FILE="$OUTPUT_DIR/${prec}${BASENAME}"
 
     # Use sed to replace template variables
@@ -80,6 +90,7 @@ for prec in s d c z; do
         -e "s/@MUMPS_PREFIX_LOWER@/${PREFIX_LOWER}/g" \
         -e "s/@MUMPS_REAL_TYPE@/${REAL_TYPE}/g" \
         -e "s/@MUMPS_REAL_CONV@/${REAL_CONV}/g" \
+        -e "s/@MUMPS_REAL_LIT@/${REAL_LIT}/g" \
         -e "s/@MUMPS_TYPE@/${TYPE}/g" \
         "$TEMPLATE" > "$OUTPUT_FILE"
 
