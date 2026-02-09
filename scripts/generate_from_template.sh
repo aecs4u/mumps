@@ -14,6 +14,12 @@
 #                            (Fortran intrinsic for real-valued conversion)
 #   @MUMPS_REAL_LIT@      → E0, D0, E0, D0
 #                            (Fortran real literal exponent suffix)
+#   @MUMPS_ARITH@         → real, real, complex, complex
+#                            (arithmetic type string for MatrixMarket format)
+#   @MUMPS_RHS_WRITE@     → id%RHS(K8), id%RHS(K8),
+#                            real(id%RHS(K8)), aimag(id%RHS(K8)),
+#                            dble(id%RHS(K8)), aimag(id%RHS(K8))
+#                            (RHS array write format: real→single value, complex→real,imag)
 #
 
 set -euo pipefail
@@ -72,6 +78,20 @@ declare -A REAL_LITS=(
     [z]="D0"
 )
 
+declare -A ARITHS=(
+    [s]="real"
+    [d]="real"
+    [c]="complex"
+    [z]="complex"
+)
+
+declare -A RHS_WRITES=(
+    [s]="id%RHS(K8)"
+    [d]="id%RHS(K8)"
+    [c]="real(id%RHS(K8)), aimag(id%RHS(K8))"
+    [z]="dble(id%RHS(K8)), aimag(id%RHS(K8))"
+)
+
 # Generate for each precision
 for prec in s d c z; do
     PREFIX="${PREFIXES[$prec]}"
@@ -80,17 +100,23 @@ for prec in s d c z; do
     REAL_TYPE="${REAL_TYPES[$prec]}"
     REAL_CONV="${REAL_CONVS[$prec]}"
     REAL_LIT="${REAL_LITS[$prec]}"
+    ARITH="${ARITHS[$prec]}"
+    RHS_WRITE="${RHS_WRITES[$prec]}"
     OUTPUT_FILE="$OUTPUT_DIR/${prec}${BASENAME}"
 
     # Use sed to replace template variables
     # NOTE: @MUMPS_REAL_TYPE@ must be replaced BEFORE @MUMPS_TYPE@
     # to avoid partial matches
+    # NOTE: @MUMPS_RHS_WRITE@ must be escaped for sed (contains special chars)
+    RHS_WRITE_ESCAPED=$(echo "$RHS_WRITE" | sed 's/[&/\]/\\&/g')
     sed \
         -e "s/@MUMPS_PREFIX@/${PREFIX}/g" \
         -e "s/@MUMPS_PREFIX_LOWER@/${PREFIX_LOWER}/g" \
         -e "s/@MUMPS_REAL_TYPE@/${REAL_TYPE}/g" \
         -e "s/@MUMPS_REAL_CONV@/${REAL_CONV}/g" \
         -e "s/@MUMPS_REAL_LIT@/${REAL_LIT}/g" \
+        -e "s/@MUMPS_ARITH@/${ARITH}/g" \
+        -e "s/@MUMPS_RHS_WRITE@/${RHS_WRITE_ESCAPED}/g" \
         -e "s/@MUMPS_TYPE@/${TYPE}/g" \
         "$TEMPLATE" > "$OUTPUT_FILE"
 
