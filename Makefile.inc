@@ -60,7 +60,7 @@ RANLIB = ranlib
 BLAS_VENDOR ?= auto
 HAVE_PKG_CONFIG := $(shell command -v pkg-config >/dev/null 2>&1 && echo yes)
 MKL_PC_NAME := $(shell command -v pkg-config >/dev/null 2>&1 && for p in mkl-dynamic-lp64-seq mkl-dynamic-ilp64-seq mkl-sdl; do pkg-config --exists $$p >/dev/null 2>&1 && { echo $$p; exit 0; }; done)
-AMD_VITIS_PC_NAME := $(shell command -v pkg-config >/dev/null 2>&1 && for p in amdblis aocl-blis blis; do pkg-config --exists $$p >/dev/null 2>&1 && { echo $$p; exit 0; }; done)
+AMD_VITIS_PC_NAME := $(shell command -v pkg-config >/dev/null 2>&1 && for p in blis-mt amdblis aocl-blis blis; do pkg-config --exists $$p >/dev/null 2>&1 && { echo $$p; exit 0; }; done)
 
 ifeq ($(BLAS_VENDOR),auto)
   ifeq ($(HAVE_PKG_CONFIG),yes)
