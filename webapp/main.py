@@ -75,12 +75,12 @@ def _run_meta(conn: sqlite3.Connection, run_id: int) -> dict[str, str]:
     return meta
 
 
-def load_sparse_results_from_db(precision: str | None = None) -> dict[str, Any]:
+def load_sparse_results_from_db(precision: str | None = None, ordering: str | None = None) -> dict[str, Any]:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         run = _latest_run(conn, "sparse")
         if run is None:
-            return {"rows": [], "meta": {}, "precisions": []}
+            return {"rows": [], "meta": {}, "precisions": [], "orderings": []}
 
         # Get available precisions for this run
         precisions_query = """
@@ -91,9 +91,18 @@ def load_sparse_results_from_db(precision: str | None = None) -> dict[str, Any]:
         """
         precisions = [r[0] for r in conn.execute(precisions_query, (run["id"],)).fetchall()]
 
-        # Query with optional precision filter
+        # Get available orderings for this run
+        orderings_query = """
+            SELECT DISTINCT ordering
+            FROM sparse_results
+            WHERE run_id = ?
+            ORDER BY ordering
+        """
+        orderings = [r[0] for r in conn.execute(orderings_query, (run["id"],)).fetchall()]
+
+        # Query with optional precision and ordering filters
         query = """
-            SELECT vendor, precision, median_s, mean_s, best_s, runs_s
+            SELECT vendor, precision, ordering, ordering_id, median_s, mean_s, best_s, runs_s
             FROM sparse_results
             WHERE run_id = ?
         """
@@ -103,7 +112,11 @@ def load_sparse_results_from_db(precision: str | None = None) -> dict[str, Any]:
             query += " AND precision = ?"
             params.append(precision)
 
-        query += " ORDER BY precision ASC, median_s ASC"
+        if ordering:
+            query += " AND ordering = ?"
+            params.append(ordering)
+
+        query += " ORDER BY precision ASC, ordering ASC, median_s ASC"
 
         rows = [dict(row) for row in conn.execute(query, params).fetchall()]
 
@@ -115,7 +128,7 @@ def load_sparse_results_from_db(precision: str | None = None) -> dict[str, Any]:
         requested = _parse_vendors_field(meta.get("vendors"))
         present = [str(r.get("vendor", "")) for r in rows]
         missing = [v for v in requested if v not in present]
-        return {"rows": rows, "meta": meta, "missing_vendors": missing, "precisions": precisions}
+        return {"rows": rows, "meta": meta, "missing_vendors": missing, "precisions": precisions, "orderings": orderings}
 
 
 def load_dense_results_from_db(precision: str | None = None) -> dict[str, Any]:
@@ -177,32 +190,38 @@ def load_dense_results_from_db(precision: str | None = None) -> dict[str, Any]:
         return {"scores": scores, "cases": cases, "meta": meta, "missing_vendors": missing, "precisions": precisions}
 
 
-def load_sparse_results(precision: str | None = None) -> dict[str, Any]:
+def load_sparse_results(precision: str | None = None, ordering: str | None = None) -> dict[str, Any]:
     if DB_PATH.exists():
         try:
-            return load_sparse_results_from_db(precision=precision)
+            return load_sparse_results_from_db(precision=precision, ordering=ordering)
         except sqlite3.DatabaseError:
             pass
-    # TSV fallback - load precision-specific file or default to 'd'
+    # TSV fallback - try ordering-specific file first
     prec = precision or 'd'
-    tsv_path = RESULTS_DIR / f"sparse_blas_{prec}_latest.tsv"
+    ord = ordering or 'Auto'
+    tsv_path = RESULTS_DIR / f"sparse_blas_{prec}_{ord}_latest.tsv"
     if not tsv_path.exists():
-        tsv_path = RESULTS_DIR / "sparse_blas_latest.tsv"  # Fallback to old naming
+        tsv_path = RESULTS_DIR / f"sparse_blas_{prec}_latest.tsv"  # Fallback to old naming
+    if not tsv_path.exists():
+        tsv_path = RESULTS_DIR / "sparse_blas_latest.tsv"  # Ultimate fallback
     rows = _read_tsv(tsv_path) if tsv_path.exists() else []
     for row in rows:
         row["median_s_num"] = _to_float(row.get("median_s"))
         row["mean_s_num"] = _to_float(row.get("mean_s"))
         row["best_s_num"] = _to_float(row.get("best_s"))
         row["precision"] = prec
+        row.setdefault("ordering", ord)
     rows.sort(key=lambda r: (r.get("median_s_num") is None, r.get("median_s_num")))
-    meta_path = RESULTS_DIR / f"sparse_blas_{prec}_latest.meta"
+    meta_path = RESULTS_DIR / f"sparse_blas_{prec}_{ord}_latest.meta"
+    if not meta_path.exists():
+        meta_path = RESULTS_DIR / f"sparse_blas_{prec}_latest.meta"
     if not meta_path.exists():
         meta_path = RESULTS_DIR / "sparse_blas_latest.meta"
     meta = _read_meta(meta_path) if meta_path.exists() else {}
     requested = _parse_vendors_field(meta.get("vendors"))
     present = [str(r.get("vendor", "")) for r in rows]
     missing = [v for v in requested if v not in present]
-    return {"rows": rows, "meta": meta, "missing_vendors": missing, "precisions": [prec]}
+    return {"rows": rows, "meta": meta, "missing_vendors": missing, "precisions": [prec], "orderings": [ord]}
 
 
 def load_dense_results(precision: str | None = None) -> dict[str, Any]:
@@ -244,22 +263,40 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, precision: str = "d") -> HTMLResponse:
+async def index(request: Request, precision: str = "d", ordering: str = "Auto") -> HTMLResponse:
     # Validate precision
     if precision not in ['s', 'd', 'c', 'z']:
         precision = 'd'
 
-    sparse = load_sparse_results(precision=precision)
+    # Validate ordering
+    valid_orderings = ["AMD", "AMF", "SCOTCH", "PORD", "METIS", "QAMD", "Auto"]
+    if ordering not in valid_orderings:
+        ordering = "Auto"
+
+    sparse = load_sparse_results(precision=precision, ordering=ordering)
     dense = load_dense_results(precision=precision)
 
     # Get all available precisions (union of sparse and dense)
     all_precisions = sorted(set(sparse.get("precisions", []) + dense.get("precisions", [])))
+
+    # Get all available orderings from sparse results
+    all_orderings = sparse.get("orderings", ["Auto"])
 
     precision_names = {
         's': 'Single (float)',
         'd': 'Double (double)',
         'c': 'Complex Single',
         'z': 'Complex Double',
+    }
+
+    ordering_descriptions = {
+        'AMD': 'Approximate Minimum Degree',
+        'AMF': 'Approximate Minimum Fill',
+        'SCOTCH': 'SCOTCH partitioner',
+        'PORD': 'PORD ordering',
+        'METIS': 'METIS partitioner',
+        'QAMD': 'QAMD with quasi-dense detection',
+        'Auto': 'Automatic selection by MUMPS',
     }
 
     context = {
@@ -269,8 +306,11 @@ async def index(request: Request, precision: str = "d") -> HTMLResponse:
         "sparse": sparse,
         "dense": dense,
         "current_precision": precision,
+        "current_ordering": ordering,
         "all_precisions": all_precisions if all_precisions else ['d'],
+        "all_orderings": all_orderings if all_orderings else ['Auto'],
         "precision_names": precision_names,
+        "ordering_descriptions": ordering_descriptions,
     }
     return templates.TemplateResponse("index.html", context)
 

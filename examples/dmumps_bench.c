@@ -26,9 +26,10 @@
 
 static void usage(const char *prog) {
   fprintf(stderr,
-          "Usage: %s [--ngrid N] [--nrhs R]\n"
-          "  --ngrid N  Grid size per dimension (default: 220)\n"
-          "  --nrhs R   Number of right-hand sides (default: 4)\n",
+          "Usage: %s [--ngrid N] [--nrhs R] [--ordering O]\n"
+          "  --ngrid N    Grid size per dimension (default: 220)\n"
+          "  --nrhs R     Number of right-hand sides (default: 4)\n"
+          "  --ordering O Ordering method (0=AMD, 2=AMF, 3=SCOTCH, 4=PORD, 5=METIS, 6=QAMD, 7=Auto, default: 7)\n",
           prog);
 }
 
@@ -116,6 +117,7 @@ int main(int argc, char **argv) {
   int ierr, myid;
   int ngrid = 220;
   int nrhs = 4;
+  int ordering = 7;
   int i, j;
   int error = 0;
   int infog1 = 0, infog2 = 0;
@@ -138,6 +140,17 @@ int main(int argc, char **argv) {
       ++i;
     } else if (strcmp(argv[i], "--nrhs") == 0) {
       if (i + 1 >= argc || !parse_positive_int(argv[i + 1], &nrhs)) {
+        usage(argv[0]);
+        return 2;
+      }
+      ++i;
+    } else if (strcmp(argv[i], "--ordering") == 0) {
+      if (i + 1 >= argc || !parse_positive_int(argv[i + 1], &ordering)) {
+        usage(argv[0]);
+        return 2;
+      }
+      if (ordering < 0 || ordering > 7 || ordering == 1) {
+        fprintf(stderr, "Ordering must be 0, 2-7 (1 is reserved by MUMPS)\n");
         usage(argv[0]);
         return 2;
       }
@@ -234,6 +247,7 @@ int main(int argc, char **argv) {
   id.ICNTL(2) = -1;
   id.ICNTL(3) = -1;
   id.ICNTL(4) = 0;
+  id.ICNTL(7) = ordering;
 
   t0 = MPI_Wtime();
   id.job = 6;
@@ -264,6 +278,7 @@ int main(int argc, char **argv) {
     printf("DMUMPS_BENCH_N=%d\n", (int)n);
     printf("DMUMPS_BENCH_NNZ=%lld\n", (long long)nnz_final);
     printf("DMUMPS_BENCH_NRHS=%d\n", nrhs);
+    printf("DMUMPS_BENCH_ORDERING=%d\n", ordering);
     printf("DMUMPS_BENCH_JOB6_SECONDS=%.6f\n", t1 - t0);
     printf("DMUMPS_BENCH_INFOG1=%d\n", infog1);
     printf("DMUMPS_BENCH_INFOG2=%d\n", infog2);

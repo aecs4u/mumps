@@ -55,11 +55,13 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             run_id INTEGER NOT NULL,
             vendor TEXT NOT NULL,
             precision TEXT NOT NULL CHECK (precision IN ('s', 'd', 'c', 'z')),
+            ordering TEXT NOT NULL,
+            ordering_id INTEGER NOT NULL,
             median_s REAL NOT NULL,
             mean_s REAL NOT NULL,
             best_s REAL NOT NULL,
             runs_s TEXT NOT NULL,
-            PRIMARY KEY (run_id, vendor, precision),
+            PRIMARY KEY (run_id, vendor, precision, ordering),
             FOREIGN KEY (run_id) REFERENCES benchmark_runs(id) ON DELETE CASCADE
         );
 
@@ -92,6 +94,9 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sparse_precision
             ON sparse_results(precision, run_id);
+
+        CREATE INDEX IF NOT EXISTS idx_sparse_ordering
+            ON sparse_results(ordering, precision, run_id);
 
         CREATE INDEX IF NOT EXISTS idx_dense_scores_precision
             ON dense_scores(precision, run_id);
@@ -127,42 +132,98 @@ def insert_run(conn: sqlite3.Connection, benchmark_type: str, meta: dict[str, st
 
 
 def ingest_sparse(conn: sqlite3.Connection, results_dir: Path, precisions: list[str]) -> list[int]:
+    """Ingest sparse benchmark results with ordering dimension support.
+
+    File naming pattern: sparse_blas_{precision}_{ordering_name}_latest.tsv/meta
+    where ordering_name is one of: AMD, AMF, SCOTCH, PORD, METIS, QAMD, Auto
+    """
     run_ids = []
+    ordering_names = ["AMD", "AMF", "SCOTCH", "PORD", "METIS", "QAMD", "Auto"]
+
     for precision in precisions:
-        meta_path = results_dir / f"sparse_blas_{precision}_latest.meta"
-        tsv_path = results_dir / f"sparse_blas_{precision}_latest.tsv"
-        if not meta_path.exists() or not tsv_path.exists():
-            print(f"Warning: Missing sparse benchmark files for precision {precision}: {meta_path} and/or {tsv_path}")
-            continue
+        # Try to find ordering-specific files first
+        found_any = False
+        for ordering_name in ordering_names:
+            meta_path = results_dir / f"sparse_blas_{precision}_{ordering_name}_latest.meta"
+            tsv_path = results_dir / f"sparse_blas_{precision}_{ordering_name}_latest.tsv"
 
-        meta = read_meta(meta_path)
-        rows = read_tsv(tsv_path)
+            if not meta_path.exists() or not tsv_path.exists():
+                continue
 
-        # Verify precision in metadata matches
-        if meta.get("precision") != precision:
-            print(f"Warning: Precision mismatch for {meta_path}: expected {precision}, got {meta.get('precision')}")
+            found_any = True
+            meta = read_meta(meta_path)
+            rows = read_tsv(tsv_path)
 
-        run_id = insert_run(conn, "sparse", meta)
-        conn.executemany(
-            """
-            INSERT INTO sparse_results(run_id, vendor, precision, median_s, mean_s, best_s, runs_s)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    run_id,
-                    row["vendor"],
-                    precision,
-                    float(row["median_s"]),
-                    float(row["mean_s"]),
-                    float(row["best_s"]),
-                    row["runs_s"],
+            # Verify precision in metadata matches
+            if meta.get("precision") != precision:
+                print(f"Warning: Precision mismatch for {meta_path}: expected {precision}, got {meta.get('precision')}")
+
+            # Extract ordering info from metadata
+            ordering_id = int(meta.get("ordering", "7"))  # Default to Auto (7)
+            ordering = meta.get("ordering_name", ordering_name)
+
+            run_id = insert_run(conn, "sparse", meta)
+            conn.executemany(
+                """
+                INSERT INTO sparse_results(run_id, vendor, precision, ordering, ordering_id, median_s, mean_s, best_s, runs_s)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run_id,
+                        row["vendor"],
+                        precision,
+                        ordering,
+                        ordering_id,
+                        float(row["median_s"]),
+                        float(row["mean_s"]),
+                        float(row["best_s"]),
+                        row["runs_s"],
+                    )
+                    for row in rows
+                ],
+            )
+            run_ids.append(run_id)
+            print(f"  Ingested sparse precision {precision}, ordering {ordering}: run_id={run_id}")
+
+        # Fallback: try old naming pattern without ordering (for backward compatibility)
+        if not found_any:
+            meta_path = results_dir / f"sparse_blas_{precision}_latest.meta"
+            tsv_path = results_dir / f"sparse_blas_{precision}_latest.tsv"
+            if meta_path.exists() and tsv_path.exists():
+                meta = read_meta(meta_path)
+                rows = read_tsv(tsv_path)
+
+                # Default to Auto ordering if not specified
+                ordering_id = int(meta.get("ordering", "7"))
+                ordering = meta.get("ordering_name", "Auto")
+
+                run_id = insert_run(conn, "sparse", meta)
+                conn.executemany(
+                    """
+                    INSERT INTO sparse_results(run_id, vendor, precision, ordering, ordering_id, median_s, mean_s, best_s, runs_s)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            run_id,
+                            row["vendor"],
+                            precision,
+                            ordering,
+                            ordering_id,
+                            float(row["median_s"]),
+                            float(row["mean_s"]),
+                            float(row["best_s"]),
+                            row["runs_s"],
+                        )
+                        for row in rows
+                    ],
                 )
-                for row in rows
-            ],
-        )
-        run_ids.append(run_id)
-        print(f"  Ingested sparse precision {precision}: run_id={run_id}")
+                run_ids.append(run_id)
+                print(f"  Ingested sparse precision {precision} (legacy format): run_id={run_id}")
+            else:
+                print(f"Warning: No sparse benchmark files found for precision {precision}")
+
     return run_ids
 
 

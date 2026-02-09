@@ -10,6 +10,7 @@ export LD_LIBRARY_PATH="$ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 PRECISIONS="${BENCH_PRECISIONS:-d}"
 VENDORS="${BENCH_VENDORS:-openblas mkl blis pkgconfig reference}"
+ORDERINGS="${BENCH_ORDERINGS:-7}"
 RUNS="${BENCH_RUNS:-3}"
 WARMUP_RUNS="${BENCH_WARMUP_RUNS:-1}"
 SKIP_CLEAN="${BENCH_SKIP_CLEAN:-1}"
@@ -19,6 +20,16 @@ MAKE_JOBS="${BENCH_MAKE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
 THREADS="${BENCH_THREADS:-${OMP_NUM_THREADS:-1}}"
 RESULTS_DIR="${BENCH_RESULTS_DIR:-benchmarks/results}"
 RESULTS_BASENAME="${BENCH_RESULTS_BASENAME:-sparse_blas}"
+
+# Ordering method names (ICNTL(7) values)
+declare -A ORDERING_NAMES
+ORDERING_NAMES[0]="AMD"
+ORDERING_NAMES[2]="AMF"
+ORDERING_NAMES[3]="SCOTCH"
+ORDERING_NAMES[4]="PORD"
+ORDERING_NAMES[5]="METIS"
+ORDERING_NAMES[6]="QAMD"
+ORDERING_NAMES[7]="Auto"
 
 export OMP_NUM_THREADS="$THREADS"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-$THREADS}"
@@ -142,6 +153,7 @@ CPU_GOVERNOR_STR="$(scaling_governor)"
 echo "BLAS benchmark configuration"
 echo "  precisions: $PRECISIONS"
 echo "  vendors: $VENDORS"
+echo "  orderings: $ORDERINGS"
 echo "  runs: $RUNS"
 echo "  warmup runs: $WARMUP_RUNS"
 echo "  skip clean: $SKIP_CLEAN"
@@ -175,17 +187,23 @@ for precision in $PRECISIONS; do
   BENCH_BIN="${precision}mumps_bench"
   OUTPUT_PREFIX="${PRECISION_UPPER}MUMPS_BENCH_"
 
+  echo "===> Precision: ${precision} (${PRECISION_UPPER}MUMPS)"
+  echo
+
+for ordering in $ORDERINGS; do
+  ORDERING_NAME="${ORDERING_NAMES[$ordering]}"
+
+  echo "==> Ordering: ${ORDERING_NAME} (ICNTL(7)=${ordering})"
+  echo
+
   TIMESTAMP_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
-  RESULTS_TSV="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_${TIMESTAMP_UTC}.tsv"
-  RESULTS_META="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_${TIMESTAMP_UTC}.meta"
-  LATEST_TSV="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_latest.tsv"
-  LATEST_META="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_latest.meta"
+  RESULTS_TSV="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_${ORDERING_NAME}_${TIMESTAMP_UTC}.tsv"
+  RESULTS_META="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_${ORDERING_NAME}_${TIMESTAMP_UTC}.meta"
+  LATEST_TSV="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_${ORDERING_NAME}_latest.tsv"
+  LATEST_META="$RESULTS_DIR/${RESULTS_BASENAME}_${precision}_${ORDERING_NAME}_latest.meta"
 
   RESULTS_FILE="$(mktemp)"
   trap 'rm -f "$RESULTS_FILE"' EXIT
-
-  echo "===> Precision: ${precision} (${PRECISION_UPPER}MUMPS)"
-  echo
 
 for vendor in $VENDORS; do
   build_log="$(mktemp)"
@@ -211,7 +229,7 @@ for vendor in $VENDORS; do
   if (( WARMUP_RUNS > 0 )); then
     warmup_failed=0
     for warmup_id in $(seq 1 "$WARMUP_RUNS"); do
-      warmup_out="$(./examples/$BENCH_BIN --ngrid "$NGRID" --nrhs "$NRHS" 2>&1 || true)"
+      warmup_out="$(./examples/$BENCH_BIN --ngrid "$NGRID" --nrhs "$NRHS" --ordering "$ordering" 2>&1 || true)"
       warmup_sec="$(printf '%s\n' "$warmup_out" | awk -F= "/^${OUTPUT_PREFIX}JOB6_SECONDS=/{print \$2; exit}")"
       if [[ -z "$warmup_sec" ]]; then
         echo "  warmup $warmup_id failed:"
@@ -229,7 +247,7 @@ for vendor in $VENDORS; do
   fi
 
   for run_id in $(seq 1 "$RUNS"); do
-    run_out="$(./examples/$BENCH_BIN --ngrid "$NGRID" --nrhs "$NRHS" 2>&1)"
+    run_out="$(./examples/$BENCH_BIN --ngrid "$NGRID" --nrhs "$NRHS" --ordering "$ordering" 2>&1)"
     sec="$(printf '%s\n' "$run_out" | awk -F= "/^${OUTPUT_PREFIX}JOB6_SECONDS=/{print \$2; exit}")"
     if [[ -z "$sec" ]]; then
       echo "  run $run_id failed:"
@@ -285,6 +303,8 @@ echo "Recommended BLAS_VENDOR=${best_vendor} (median ${best_median}s on this ben
 {
   echo "type=sparse"
   echo "precision=${precision}"
+  echo "ordering=${ordering}"
+  echo "ordering_name=${ORDERING_NAME}"
   echo "generated_at_utc=${TIMESTAMP_UTC}"
   echo "vendors=${VENDORS}"
   echo "runs=${RUNS}"
@@ -314,4 +334,5 @@ cp "$RESULTS_META" "$LATEST_META"
 echo "Saved sparse benchmark results to $LATEST_TSV"
 echo
 
+done  # End ordering loop
 done  # End precision loop
