@@ -1,0 +1,149 @@
+{
+  "description": "Test matrix fixtures for MUMPS benchmarking",
+  "format": "MUMPS coordinate format (.coo)",
+  "format_spec": {
+    "header_line_1": "# Comment describing matrix",
+    "header_line_2": "# n nnz",
+    "header_line_3": "n nnz (dimension and number of non-zeros)",
+    "header_line_4": "# i j value",
+    "data_lines": "i j value (1-indexed row, column, value triplets)"
+  },
+  "fixtures": [
+    {
+      "category": "small",
+      "matrices": [
+        {
+          "name": "tiny_diagonal",
+          "file": "test_tiny_10x10_diagonal.coo",
+          "description": "10×10 diagonal matrix for quick unit tests",
+          "n": 10,
+          "nnz": 10,
+          "type": "diagonal",
+          "symmetric": true,
+          "spd": true
+        },
+        {
+          "name": "small_laplacian",
+          "file": "test_small_10x10_laplacian.coo",
+          "description": "2D Laplacian on 10×10 grid (100 unknowns, 5-point stencil)",
+          "n": 100,
+          "nnz": 460,
+          "type": "laplacian_2d",
+          "grid_size": 10,
+          "symmetric": true,
+          "spd": true
+        },
+        {
+          "name": "small_tridiagonal",
+          "file": "test_small_100_tridiagonal.coo",
+          "description": "100×100 tridiagonal matrix",
+          "n": 100,
+          "nnz": 298,
+          "type": "tridiagonal",
+          "symmetric": true,
+          "spd": true
+        }
+      ]
+    },
+    {
+      "category": "medium",
+      "matrices": [
+        {
+          "name": "medium_laplacian",
+          "file": "test_medium_50x50_laplacian.coo",
+          "description": "2D Laplacian on 50×50 grid (2,500 unknowns)",
+          "n": 2500,
+          "nnz": 12300,
+          "type": "laplacian_2d",
+          "grid_size": 50,
+          "symmetric": true,
+          "spd": true
+        },
+        {
+          "name": "medium_tridiagonal",
+          "file": "test_medium_1000_tridiagonal.coo",
+          "description": "1,000×1,000 tridiagonal matrix",
+          "n": 1000,
+          "nnz": 2998,
+          "type": "tridiagonal",
+          "symmetric": true,
+          "spd": true
+        },
+        {
+          "name": "medium_diagonal",
+          "file": "test_medium_1000x1000_diagonal.coo",
+          "description": "1,000×1,000 diagonal matrix",
+          "n": 1000,
+          "nnz": 1000,
+          "type": "diagonal",
+          "symmetric": true,
+          "spd": true
+        }
+      ]
+    },
+    {
+      "category": "large",
+      "matrices": [
+        {
+          "name": "large_laplacian",
+          "file": "test_large_100x100_laplacian.coo",
+          "description": "2D Laplacian on 100×100 grid (10,000 unknowns)",
+          "n": 10000,
+          "nnz": 49600,
+          "type": "laplacian_2d",
+          "grid_size": 100,
+          "symmetric": true,
+          "spd": true
+        },
+        {
+          "name": "large_tridiagonal",
+          "file": "test_large_10000_tridiagonal.coo",
+          "description": "10,000×10,000 tridiagonal matrix",
+          "n": 10000,
+          "nnz": 29998,
+          "type": "tridiagonal",
+          "symmetric": true,
+          "spd": true
+        }
+      ]
+    },
+    {
+      "category": "huge",
+      "matrices": [
+        {
+          "name": "huge_laplacian",
+          "file": "test_huge_200x200_laplacian.coo",
+          "description": "2D Laplacian on 200×200 grid (40,000 unknowns)",
+          "n": 40000,
+          "nnz": 199200,
+          "type": "laplacian_2d",
+          "grid_size": 200,
+          "symmetric": true,
+          "spd": true
+        },
+        {
+          "name": "huge_tridiagonal",
+          "file": "test_huge_50000_tridiagonal.coo",
+          "description": "50,000×50,000 tridiagonal matrix",
+          "n": 50000,
+          "nnz": 149998,
+          "type": "tridiagonal",
+          "symmetric": true,
+          "spd": true
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "generate": "python3 scripts/generate_test_matrices.py --size all",
+    "generate_custom": "python3 scripts/generate_test_matrices.py --type laplacian --ngrid 50 --output custom.coo",
+    "load_in_c": "See examples/matrix_loader.c (to be implemented)",
+    "format_conversion": "See scripts/convert_matrix.py (to be implemented)"
+  },
+  "notes": [
+    "All matrices use 1-based indexing (Fortran/MUMPS convention)",
+    "All test matrices are symmetric positive definite (SPD)",
+    "Laplacian matrices use 5-point stencil on 2D grid",
+    "File sizes range from <1KB (tiny) to ~10MB (huge)"
+  ]
+}

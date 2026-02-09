@@ -53,3 +53,83 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# MUMPS-specific build artifacts
+# Compiled benchmark binaries
+/examples/*simpletest
+/examples/*simpletest_save_restore
+/examples/c_example
+/examples/c_example_save_restore
+/examples/multiple_arithmetics_example
+/examples/*mumps_bench
+/examples/*gemm_bench
+
+# Generated header files
+/include/mumps_int_def.h
+
+# Build directories
+/build/
+/dist/
+/out/
+*.build/
+
+# Library output directories (keep .gitkeep if present)
+/lib/*.a
+/lib/*.so
+/lib/*.so.*
+/lib/*.dylib
+/libseq/*.a
+/libseq/*.so
+/libseq/*.so.*
+/libseq/*.o
+
+# Benchmark results (keep templates/fixtures)
+/benchmarks/results/*.tsv
+/benchmarks/results/*.meta
+/benchmarks/results/*.sqlite
+/benchmarks/results/*.sqlite-journal
+/benchmarks/results/*.backup
+
+# Editor and IDE files
+*~
+*.swp
+*.swo
+.*.swp
+.*.swo
+.DS_Store
+.vscode/
+.idea/
+*.iml
+.project
+.cproject
+.settings/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+/venv/
+/env/
+/ENV/
+
+# FastAPI/Web
+/webapp/.env
+/webapp/*.log
+
+# Documentation builds
+/doc/**/*.aux
+/doc/**/*.log
+/doc/**/*.toc
+/doc/**/*.out
+
+# Core dumps and profiling
+core
+core.*
+vgcore.*
+gmon.out
+*.gcov
+*.gcda
+*.gcno
