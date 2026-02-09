@@ -23,6 +23,49 @@ densebench: sgemm_bench dgemm_bench cgemm_bench zgemm_bench
 
 include $(topdir)/Makefile.inc
 
+EXAMPLES_CONFIG_STAMP = .build_config.stamp
+EXAMPLE_OBJECTS = \
+	$(patsubst %.c,%.o,$(wildcard *.c)) \
+	$(patsubst %.F,%.o,$(wildcard *.F)) \
+	$(patsubst %.F90,%.o,$(wildcard *.F90))
+EXAMPLE_BINS = \
+	ssimpletest dsimpletest csimpletest zsimpletest \
+	ssimpletest_save_restore dsimpletest_save_restore csimpletest_save_restore zsimpletest_save_restore \
+	c_example c_example_save_restore multiple_arithmetics_example \
+	smumps_bench dmumps_bench cmumps_bench zmumps_bench \
+	sgemm_bench dgemm_bench cgemm_bench zgemm_bench
+
+$(EXAMPLES_CONFIG_STAMP): FORCE
+	@tmp="$@.tmp"; \
+	{ \
+	  printf 'BUILD=%s\n' "$(BUILD)"; \
+	  printf 'BLAS_VENDOR=%s\n' "$(BLAS_VENDOR)"; \
+	  printf 'CC=%s\n' "$(CC)"; \
+	  printf 'FC=%s\n' "$(FC)"; \
+	  printf 'FL=%s\n' "$(FL)"; \
+	  printf 'CDEFS=%s\n' "$(CDEFS)"; \
+	  printf 'OPTC=%s\n' "$(OPTC)"; \
+	  printf 'OPTF=%s\n' "$(OPTF)"; \
+	  printf 'OPTL=%s\n' "$(OPTL)"; \
+	  printf 'INCS=%s\n' "$(INCS)"; \
+	  printf 'LIBBLAS=%s\n' "$(LIBBLAS)"; \
+	  printf 'LAPACK=%s\n' "$(LAPACK)"; \
+	  printf 'LIBOTHERS=%s\n' "$(LIBOTHERS)"; \
+	  printf 'LIBS=%s\n' "$(LIBS)"; \
+	  printf 'LORDERINGS=%s\n' "$(LORDERINGS)"; \
+	  printf 'RPATH_OPT=%s\n' "$(RPATH_OPT)"; \
+	  printf 'PLAT=%s\n' "$(PLAT)"; \
+	} > "$$tmp"; \
+	if [ ! -f "$@" ] || ! cmp -s "$$tmp" "$@"; then \
+	  mv "$$tmp" "$@"; \
+	else \
+	  rm -f "$$tmp"; \
+	fi
+
+FORCE:
+
+$(EXAMPLE_OBJECTS) $(EXAMPLE_BINS): $(EXAMPLES_CONFIG_STAMP)
+
 
 
 LIBSMUMPS = -L$(libdir) -lsmumps$(PLAT) -lmumps_common$(PLAT)
@@ -107,10 +150,13 @@ zgemm_bench.o: zgemm_bench.F90
 .F.o:
 	$(FC) $(OPTF) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c $*.F $(OUTF)$*.o
 .c.o:
-	$(CC) $(OPTC) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c $*.c $(OUTC)$*.o
+	$(CC) $(OPTC) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) $(DEPFLAGS_C) -c $*.c $(OUTC)$*.o
 
 clean:
 	$(RM) *.o [sdcz]simpletest c_example multiple_arithmetics_example \
 		smumps_bench dmumps_bench cmumps_bench zmumps_bench \
 		sgemm_bench dgemm_bench cgemm_bench zgemm_bench \
-		ssimpletest_save_restore dsimpletest_save_restore csimpletest_save_restore zsimpletest_save_restore c_example_save_restore
+		ssimpletest_save_restore dsimpletest_save_restore csimpletest_save_restore zsimpletest_save_restore c_example_save_restore \
+		*.d $(EXAMPLES_CONFIG_STAMP)
+
+-include $(wildcard *.d)

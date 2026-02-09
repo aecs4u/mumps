@@ -55,6 +55,36 @@ FL = gfortran
 AR = ar vr 
 RANLIB = ranlib
 
+# Compiler cache support (ccache).
+# USE_CCACHE can be: auto (default), 1, 0.
+USE_CCACHE ?= auto
+CCACHE_BIN := $(shell command -v ccache 2>/dev/null)
+BASE_CC := $(CC)
+BASE_FC := $(FC)
+BASE_FL := $(FL)
+
+ifeq ($(USE_CCACHE),1)
+  ifeq ($(CCACHE_BIN),)
+    $(warning USE_CCACHE=1 but ccache was not found; continuing without ccache)
+  else
+    CC := $(CCACHE_BIN) $(BASE_CC)
+    FC := $(CCACHE_BIN) $(BASE_FC)
+    FL := $(CCACHE_BIN) $(BASE_FL)
+  endif
+else ifeq ($(USE_CCACHE),auto)
+  ifneq ($(CCACHE_BIN),)
+    ifeq ($(findstring ccache,$(BASE_CC)),)
+      CC := $(CCACHE_BIN) $(BASE_CC)
+    endif
+    ifeq ($(findstring ccache,$(BASE_FC)),)
+      FC := $(CCACHE_BIN) $(BASE_FC)
+    endif
+    ifeq ($(findstring ccache,$(BASE_FL)),)
+      FL := $(CCACHE_BIN) $(BASE_FL)
+    endif
+  endif
+endif
+
 # BLAS/LAPACK vendor selection.
 # BLAS_VENDOR can be: auto (default), openblas, mkl, blis, pkgconfig, reference.
 BLAS_VENDOR ?= auto
@@ -166,15 +196,19 @@ BUILD ?= release
 COMMON_OMP_FLAGS = -fopenmp
 # Keep compatibility with stricter argument checking introduced in gfortran >= 10.
 FORTRAN_COMPAT_FLAGS = -fallow-argument-mismatch
+DEPFLAGS_C ?= -MMD -MP
+EXTRA_OPTF ?=
+EXTRA_OPTL ?=
+EXTRA_OPTC ?=
 
 ifeq ($(BUILD),release)
-OPTF    = -O3 $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS)
-OPTL    = -O3 $(COMMON_OMP_FLAGS)
-OPTC    = -O3 $(COMMON_OMP_FLAGS)
+OPTF    = -O3 $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS) $(EXTRA_OPTF)
+OPTL    = -O3 $(COMMON_OMP_FLAGS) $(EXTRA_OPTL)
+OPTC    = -O3 $(COMMON_OMP_FLAGS) $(EXTRA_OPTC)
 else ifeq ($(BUILD),debug)
-OPTF    = -O0 -g $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS) -fcheck=all -fbacktrace
-OPTL    = -O0 -g $(COMMON_OMP_FLAGS)
-OPTC    = -O0 -g $(COMMON_OMP_FLAGS) -fno-omit-frame-pointer
+OPTF    = -O0 -g $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS) -fcheck=all -fbacktrace $(EXTRA_OPTF)
+OPTL    = -O0 -g $(COMMON_OMP_FLAGS) $(EXTRA_OPTL)
+OPTC    = -O0 -g $(COMMON_OMP_FLAGS) -fno-omit-frame-pointer $(EXTRA_OPTC)
 else
 $(error Unsupported BUILD='$(BUILD)'; use BUILD=release or BUILD=debug)
 endif

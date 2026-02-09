@@ -6,10 +6,13 @@ export LC_NUMERIC=C
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+export LD_LIBRARY_PATH="$ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 PRECISIONS="${BENCH_PRECISIONS:-d}"
 VENDORS="${BENCH_VENDORS:-openblas mkl blis pkgconfig reference}"
 RUNS="${BENCH_RUNS:-3}"
+WARMUP_RUNS="${BENCH_WARMUP_RUNS:-1}"
+SKIP_CLEAN="${BENCH_SKIP_CLEAN:-1}"
 NGRID="${BENCH_NGRID:-220}"
 NRHS="${BENCH_NRHS:-4}"
 MAKE_JOBS="${BENCH_MAKE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
@@ -23,6 +26,16 @@ export MKL_NUM_THREADS="${MKL_NUM_THREADS:-$THREADS}"
 
 if ! [[ "$RUNS" =~ ^[1-9][0-9]*$ ]]; then
   echo "BENCH_RUNS must be a positive integer (got: $RUNS)" >&2
+  exit 2
+fi
+
+if ! [[ "$WARMUP_RUNS" =~ ^[0-9]+$ ]]; then
+  echo "BENCH_WARMUP_RUNS must be a non-negative integer (got: $WARMUP_RUNS)" >&2
+  exit 2
+fi
+
+if ! [[ "$SKIP_CLEAN" =~ ^[01]$ ]]; then
+  echo "BENCH_SKIP_CLEAN must be 0 or 1 (got: $SKIP_CLEAN)" >&2
   exit 2
 fi
 
@@ -72,23 +85,89 @@ mean_from_list() {
   printf '%s\n' "$@" | awk '{s+=$1} END { if (NR) printf "%.6f\n", s/NR; else print "nan" }'
 }
 
+stddev_from_list() {
+  printf '%s\n' "$@" | awk '
+    { s+=$1; ss+=$1*$1; n+=1 }
+    END {
+      if (n <= 1) {
+        print "0.000000";
+      } else {
+        v=(ss - (s*s)/n)/(n-1);
+        if (v < 0) v=0;
+        printf "%.6f\n", sqrt(v);
+      }
+    }'
+}
+
+ci95_halfwidth_from_list() {
+  printf '%s\n' "$@" | awk '
+    { s+=$1; ss+=$1*$1; n+=1 }
+    END {
+      if (n <= 1) {
+        print "0.000000";
+      } else {
+        v=(ss - (s*s)/n)/(n-1);
+        if (v < 0) v=0;
+        sd=sqrt(v);
+        printf "%.6f\n", 1.96*sd/sqrt(n);
+      }
+    }'
+}
+
 min_from_list() {
   printf '%s\n' "$@" | sort -n | head -n 1
 }
+
+cpu_model_name() {
+  awk -F: '/model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}' /proc/cpuinfo 2>/dev/null || true
+}
+
+mem_total_gb() {
+  awk '/MemTotal:/ { printf "%.2f", $2 / 1024.0 / 1024.0; exit }' /proc/meminfo 2>/dev/null || true
+}
+
+scaling_governor() {
+  if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]]; then
+    cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || true
+  fi
+}
+
+HOSTNAME_STR="$(hostname 2>/dev/null || echo unknown)"
+KERNEL_STR="$(uname -sr 2>/dev/null || echo unknown)"
+CPU_MODEL_STR="$(cpu_model_name)"
+LOGICAL_CPUS_STR="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo unknown)"
+MEM_TOTAL_GB_STR="$(mem_total_gb)"
+CPU_GOVERNOR_STR="$(scaling_governor)"
 
 echo "BLAS benchmark configuration"
 echo "  precisions: $PRECISIONS"
 echo "  vendors: $VENDORS"
 echo "  runs: $RUNS"
+echo "  warmup runs: $WARMUP_RUNS"
+echo "  skip clean: $SKIP_CLEAN"
 echo "  ngrid: $NGRID"
 echo "  nrhs: $NRHS"
 echo "  make jobs: $MAKE_JOBS"
 echo "  threads: OMP=$OMP_NUM_THREADS OPENBLAS=$OPENBLAS_NUM_THREADS MKL=$MKL_NUM_THREADS"
+echo "  host: $HOSTNAME_STR | kernel: $KERNEL_STR | logical cpus: $LOGICAL_CPUS_STR"
+if [[ -n "${CPU_MODEL_STR:-}" ]]; then
+  echo "  cpu model: $CPU_MODEL_STR"
+fi
+if [[ -n "${MEM_TOTAL_GB_STR:-}" ]]; then
+  echo "  memory: ${MEM_TOTAL_GB_STR} GB"
+fi
+if [[ -n "${CPU_GOVERNOR_STR:-}" ]]; then
+  echo "  cpu governor: $CPU_GOVERNOR_STR"
+fi
 echo
 
-# Clean once at the beginning (different precisions build different libraries, so no need to clean between them)
-if ! make clean >/dev/null 2>&1; then
-  echo "WARNING: make clean failed"
+# Clean once at the beginning (different precisions build different libraries, so no need to clean between them).
+if [[ "$SKIP_CLEAN" == "0" ]]; then
+  if ! make clean >/dev/null 2>&1; then
+    echo "WARNING: make clean failed"
+  fi
+else
+  echo "Skipping initial clean step (BENCH_SKIP_CLEAN=1)."
 fi
 
 for precision in $PRECISIONS; do
@@ -129,6 +208,26 @@ for vendor in $VENDORS; do
     continue
   fi
 
+  if (( WARMUP_RUNS > 0 )); then
+    warmup_failed=0
+    for warmup_id in $(seq 1 "$WARMUP_RUNS"); do
+      warmup_out="$(./examples/$BENCH_BIN --ngrid "$NGRID" --nrhs "$NRHS" 2>&1 || true)"
+      warmup_sec="$(printf '%s\n' "$warmup_out" | awk -F= "/^${OUTPUT_PREFIX}JOB6_SECONDS=/{print \$2; exit}")"
+      if [[ -z "$warmup_sec" ]]; then
+        echo "  warmup $warmup_id failed:"
+        echo "$warmup_out"
+        warmup_failed=1
+        break
+      fi
+      echo "  warmup $warmup_id: ${warmup_sec}s"
+    done
+    if (( warmup_failed == 1 )); then
+      echo "  skipped: warmup failed"
+      rm -f "$run_log"
+      continue
+    fi
+  fi
+
   for run_id in $(seq 1 "$RUNS"); do
     run_out="$(./examples/$BENCH_BIN --ngrid "$NGRID" --nrhs "$NRHS" 2>&1)"
     sec="$(printf '%s\n' "$run_out" | awk -F= "/^${OUTPUT_PREFIX}JOB6_SECONDS=/{print \$2; exit}")"
@@ -151,9 +250,13 @@ for vendor in $VENDORS; do
 
   median="$(median_from_list "${times[@]}")"
   mean="$(mean_from_list "${times[@]}")"
+  stddev="$(stddev_from_list "${times[@]}")"
+  ci95_halfwidth="$(ci95_halfwidth_from_list "${times[@]}")"
   best="$(min_from_list "${times[@]}")"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$vendor" "$median" "$mean" "$best" "${times[*]}" >>"$RESULTS_FILE"
-  echo "  summary: median=${median}s mean=${mean}s best=${best}s"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$vendor" "$median" "$mean" "$stddev" "$ci95_halfwidth" "$best" "${times[*]}" \
+    >>"$RESULTS_FILE"
+  echo "  summary: median=${median}s mean=${mean}s stddev=${stddev}s ci95=±${ci95_halfwidth}s best=${best}s"
   echo
 done
 
@@ -163,11 +266,15 @@ if [[ ! -s "$RESULTS_FILE" ]]; then
 fi
 
 echo "Benchmark results (sorted by median time)"
-printf "%-12s %-12s %-12s %-12s %s\n" "vendor" "median_s" "mean_s" "best_s" "runs_s"
-printf "vendor\tmedian_s\tmean_s\tbest_s\truns_s\n" > "$RESULTS_TSV"
-sort -t$'\t' -k2,2n "$RESULTS_FILE" | while IFS=$'\t' read -r vendor median mean best runs; do
-  printf "%-12s %-12s %-12s %-12s %s\n" "$vendor" "$median" "$mean" "$best" "$runs"
-  printf "%s\t%s\t%s\t%s\t%s\n" "$vendor" "$median" "$mean" "$best" "$runs" >> "$RESULTS_TSV"
+printf "%-12s %-12s %-12s %-12s %-12s %-12s %s\n" \
+  "vendor" "median_s" "mean_s" "stddev_s" "ci95_s" "best_s" "runs_s"
+printf "vendor\tmedian_s\tmean_s\tstddev_s\tci95_s\tbest_s\truns_s\n" > "$RESULTS_TSV"
+sort -t$'\t' -k2,2n "$RESULTS_FILE" | while IFS=$'\t' read -r vendor median mean stddev ci95_halfwidth best runs; do
+  printf "%-12s %-12s %-12s %-12s %-12s %-12s %s\n" \
+    "$vendor" "$median" "$mean" "$stddev" "$ci95_halfwidth" "$best" "$runs"
+  printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+    "$vendor" "$median" "$mean" "$stddev" "$ci95_halfwidth" "$best" "$runs" \
+    >> "$RESULTS_TSV"
 done
 
 best_vendor="$(sort -t$'\t' -k2,2n "$RESULTS_FILE" | head -n 1 | cut -f1)"
@@ -181,9 +288,22 @@ echo "Recommended BLAS_VENDOR=${best_vendor} (median ${best_median}s on this ben
   echo "generated_at_utc=${TIMESTAMP_UTC}"
   echo "vendors=${VENDORS}"
   echo "runs=${RUNS}"
+  echo "warmup_runs=${WARMUP_RUNS}"
   echo "ngrid=${NGRID}"
   echo "nrhs=${NRHS}"
   echo "threads=${THREADS}"
+  echo "hostname=${HOSTNAME_STR}"
+  echo "kernel=${KERNEL_STR}"
+  echo "logical_cpus=${LOGICAL_CPUS_STR}"
+  if [[ -n "${CPU_MODEL_STR:-}" ]]; then
+    echo "cpu_model=${CPU_MODEL_STR}"
+  fi
+  if [[ -n "${MEM_TOTAL_GB_STR:-}" ]]; then
+    echo "mem_total_gb=${MEM_TOTAL_GB_STR}"
+  fi
+  if [[ -n "${CPU_GOVERNOR_STR:-}" ]]; then
+    echo "cpu_governor=${CPU_GOVERNOR_STR}"
+  fi
   echo "recommended_vendor=${best_vendor}"
   echo "recommended_value=${best_median}"
   echo "recommended_metric=median_s"
