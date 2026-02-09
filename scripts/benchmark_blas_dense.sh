@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 PRECISIONS="${BENCH_PRECISIONS:-d}"
-VENDORS="${BENCH_VENDORS:-openblas mkl pkgconfig reference}"
+VENDORS="${BENCH_VENDORS:-openblas mkl blis pkgconfig reference}"
 RUNS="${BENCH_RUNS:-3}"
 THREADS="${BENCH_THREADS:-${OMP_NUM_THREADS:-1}}"
 MAKE_JOBS="${BENCH_MAKE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)}"
