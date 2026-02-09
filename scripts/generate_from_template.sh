@@ -8,6 +8,10 @@
 #   @MUMPS_PREFIX@        → S, D, C, Z (precision prefix)
 #   @MUMPS_PREFIX_LOWER@  → s, d, c, z (lowercase precision prefix)
 #   @MUMPS_TYPE@          → REAL, DOUBLE PRECISION, COMPLEX, COMPLEX*16
+#   @MUMPS_REAL_TYPE@     → REAL, DOUBLE PRECISION, REAL, DOUBLE PRECISION
+#                            (real-valued type, even for complex builds)
+#   @MUMPS_REAL_CONV@     → real, dble, real, dble
+#                            (Fortran intrinsic for real-valued conversion)
 #
 
 set -euo pipefail
@@ -45,17 +49,37 @@ declare -A TYPES=(
     [z]="COMPLEX*16"
 )
 
+declare -A REAL_TYPES=(
+    [s]="REAL"
+    [d]="DOUBLE PRECISION"
+    [c]="REAL"
+    [z]="DOUBLE PRECISION"
+)
+
+declare -A REAL_CONVS=(
+    [s]="real"
+    [d]="dble"
+    [c]="real"
+    [z]="dble"
+)
+
 # Generate for each precision
 for prec in s d c z; do
     PREFIX="${PREFIXES[$prec]}"
     PREFIX_LOWER="$prec"
     TYPE="${TYPES[$prec]}"
+    REAL_TYPE="${REAL_TYPES[$prec]}"
+    REAL_CONV="${REAL_CONVS[$prec]}"
     OUTPUT_FILE="$OUTPUT_DIR/${prec}${BASENAME}"
 
     # Use sed to replace template variables
+    # NOTE: @MUMPS_REAL_TYPE@ must be replaced BEFORE @MUMPS_TYPE@
+    # to avoid partial matches
     sed \
         -e "s/@MUMPS_PREFIX@/${PREFIX}/g" \
         -e "s/@MUMPS_PREFIX_LOWER@/${PREFIX_LOWER}/g" \
+        -e "s/@MUMPS_REAL_TYPE@/${REAL_TYPE}/g" \
+        -e "s/@MUMPS_REAL_CONV@/${REAL_CONV}/g" \
         -e "s/@MUMPS_TYPE@/${TYPE}/g" \
         "$TEMPLATE" > "$OUTPUT_FILE"
 
