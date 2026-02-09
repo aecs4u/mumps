@@ -21,6 +21,10 @@
 #                            dble(id%RHS(K8)), aimag(id%RHS(K8))
 #                            (RHS array write format: real→single value, complex→real,imag)
 #
+# Conditional blocks:
+#   @IF_COMPLEX@...@ENDIF@  → Include only for c/z precisions
+#   @IF_REAL@...@ENDIF@     → Include only for s/d precisions
+#
 
 set -euo pipefail
 
@@ -104,12 +108,28 @@ for prec in s d c z; do
     RHS_WRITE="${RHS_WRITES[$prec]}"
     OUTPUT_FILE="$OUTPUT_DIR/${prec}${BASENAME}"
 
-    # Use sed to replace template variables
-    # NOTE: @MUMPS_REAL_TYPE@ must be replaced BEFORE @MUMPS_TYPE@
-    # to avoid partial matches
-    # NOTE: @MUMPS_RHS_WRITE@ must be escaped for sed (contains special chars)
+    # Process conditional blocks based on precision
+    # Complex precisions: c, z
+    # Real precisions: s, d
+    IS_COMPLEX=$([[ "$prec" == "c" || "$prec" == "z" ]] && echo "1" || echo "0")
+
+    # Use awk to handle conditional blocks, then sed for variable substitution
     RHS_WRITE_ESCAPED=$(echo "$RHS_WRITE" | sed 's/[&/\]/\\&/g')
-    sed \
+
+    awk -v is_complex="$IS_COMPLEX" '
+        /@IF_COMPLEX@/ { in_complex=1; next }
+        /@IF_REAL@/ { in_real=1; next }
+        /@ENDIF@/ {
+            in_complex=0
+            in_real=0
+            next
+        }
+        {
+            if (in_complex && !is_complex) next
+            if (in_real && is_complex) next
+            print
+        }
+    ' "$TEMPLATE" | sed \
         -e "s/@MUMPS_PREFIX@/${PREFIX}/g" \
         -e "s/@MUMPS_PREFIX_LOWER@/${PREFIX_LOWER}/g" \
         -e "s/@MUMPS_REAL_TYPE@/${REAL_TYPE}/g" \
@@ -118,7 +138,7 @@ for prec in s d c z; do
         -e "s/@MUMPS_ARITH@/${ARITH}/g" \
         -e "s/@MUMPS_RHS_WRITE@/${RHS_WRITE_ESCAPED}/g" \
         -e "s/@MUMPS_TYPE@/${TYPE}/g" \
-        "$TEMPLATE" > "$OUTPUT_FILE"
+        > "$OUTPUT_FILE"
 
     echo "Generated: $OUTPUT_FILE"
 done
