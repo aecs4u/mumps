@@ -55,10 +55,14 @@ add_vendor_lib_path() {
             ;;
     esac
 
-    # Add to LD_LIBRARY_PATH if found
-    if [[ -n "$lib_path" ]] && [[ -d "$lib_path" ]]; then
-        export LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-        echo "  Added library path: $lib_path" >&2
+    # Resolve relative paths and add to LD_LIBRARY_PATH if found
+    if [[ -n "$lib_path" ]]; then
+        # Resolve to canonical path (handles ../ and double slashes)
+        if [[ -d "$lib_path" ]]; then
+            lib_path="$(cd "$lib_path" && pwd)"
+            export LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            echo "  Added library path: $lib_path" >&2
+        fi
     fi
 }
 
