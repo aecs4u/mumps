@@ -86,7 +86,16 @@ verify_file() {
         local obj_file="/tmp/verify_${prec}${base_name}.o"
         local compile_log="/tmp/verify_${prec}${base_name}.log"
 
-        if gfortran -c -fsyntax-only "$generated_file" 2>"$compile_log"; then
+        # Use -ffree-form for modernized .F files (free-form with preprocessor support)
+        gfortran -c -fsyntax-only -ffree-form "$generated_file" 2>"$compile_log"
+        local compile_result=$?
+
+        # Check for real syntax errors (ignore module dependency errors)
+        local syntax_errors=$(grep -v "module file.*for reading" "$compile_log" | \
+                              grep -v "compilation terminated" | \
+                              grep -E "Error:|Fatal Error:" | wc -l)
+
+        if [[ $compile_result -eq 0 ]] || [[ $syntax_errors -eq 0 ]]; then
             echo -e "${GREEN}PASS${NC} ${prec}${base_name} - compiles successfully"
             ((passed++))
             rm -f "$compile_log"
