@@ -58,7 +58,6 @@ $(error Missing Makefile.inc. Provide one in $(CURDIR) or $(SRCDIR))
 endif
 include $(MAKEFILE_INC_PATH)
 -include Makefile.vendor
--include $(SRCDIR)/Makefile.vendor
 
 BUILD_CACHE ?= 1
 BUILD_CACHE_DIR ?= $(topdir)/.build-cache
