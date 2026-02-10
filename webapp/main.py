@@ -325,3 +325,40 @@ async def api_results() -> JSONResponse:
             "dense": load_dense_results(),
         }
     )
+
+
+if __name__ == "__main__":
+    import argparse
+    import uvicorn
+
+    parser = argparse.ArgumentParser(description="MUMPS Benchmark Results Web Interface")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.getenv("WEBAPP_PORT", "9002")),
+        help="Port to run the web server on (default: 9002, or WEBAPP_PORT env var)",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default=os.getenv("WEBAPP_HOST", "127.0.0.1"),
+        help="Host to bind to (default: 127.0.0.1, or WEBAPP_HOST env var)",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload for development",
+    )
+
+    args = parser.parse_args()
+
+    print(f"Starting MUMPS Benchmark Results webapp at http://{args.host}:{args.port}")
+    print(f"Results directory: {RESULTS_DIR}")
+    print(f"Database: {DB_PATH}")
+
+    uvicorn.run(
+        "webapp.main:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+    )
