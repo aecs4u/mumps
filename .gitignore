@@ -90,6 +90,10 @@ dkms.conf
 /benchmarks/results/*.sqlite-journal
 /benchmarks/results/*.backup
 
+# Benchmark database (new location)
+/benchmarks/mumps_benchmarks.sqlite
+/benchmarks/mumps_benchmarks.sqlite-journal
+
 # Editor and IDE files
 *~
 *.swp

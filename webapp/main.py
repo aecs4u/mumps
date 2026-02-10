@@ -13,7 +13,8 @@ from fastapi.templating import Jinja2Templates
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = Path(os.getenv("BLAS_BENCH_RESULTS_DIR", PROJECT_ROOT / "benchmarks" / "results"))
-DB_PATH = Path(os.getenv("BLAS_BENCH_DB", RESULTS_DIR / "blas_benchmarks.sqlite"))
+# Database path: prefer new location, fallback to old for backward compatibility
+DB_PATH = Path(os.getenv("MUMPS_BENCH_DB", os.getenv("BLAS_BENCH_DB", PROJECT_ROOT / "benchmarks" / "mumps_benchmarks.sqlite")))
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 

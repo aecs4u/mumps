@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 RESULTS_DIR="${BENCH_RESULTS_DIR:-benchmarks/results}"
-DB_PATH="${BLAS_BENCH_DB:-$RESULTS_DIR/blas_benchmarks.sqlite}"
+# Use new database location, fallback to old env var for backward compatibility
+DB_PATH="${MUMPS_BENCH_DB:-${BLAS_BENCH_DB:-benchmarks/mumps_benchmarks.sqlite}}"
 
 echo "Running sparse benchmark..."
 ./scripts/benchmark_blas.sh

@@ -9,7 +9,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS_DIR = PROJECT_ROOT / "benchmarks" / "results"
-DEFAULT_DB_PATH = DEFAULT_RESULTS_DIR / "blas_benchmarks.sqlite"
+DEFAULT_DB_PATH = PROJECT_ROOT / "benchmarks" / "mumps_benchmarks.sqlite"
 
 
 def read_meta(path: Path) -> dict[str, str]:

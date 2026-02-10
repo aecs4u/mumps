@@ -9,7 +9,7 @@
 #   WEBAPP_PORT  - Port to run on (default: 9002)
 #   WEBAPP_HOST  - Host to bind to (default: 127.0.0.1)
 #   BLAS_BENCH_RESULTS_DIR - Results directory (default: benchmarks/results)
-#   BLAS_BENCH_DB - Database path (default: benchmarks/results/blas_benchmarks.sqlite)
+#   MUMPS_BENCH_DB - Database path (default: benchmarks/mumps_benchmarks.sqlite)
 #
 
 set -euo pipefail
