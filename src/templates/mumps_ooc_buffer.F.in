@@ -506,7 +506,7 @@ C
      &        I_REL_POS_CUR_HBUF(TYPEF)
          IF (TYPEF.EQ.TYPEF_L) THEN
             DO II = IPIVBEG, IPIVEND
-               CALL ccopy(MonBloc%NROW-IPIVBEG+1, 
+               CALL @MUMPS_PREFIX_LOWER@copy(MonBloc%NROW-IPIVBEG+1, 
      &              AFAC(IPOS), MonBloc%NCOL,
      &              BUF_IO(IDEST), 1)
                IDEST = IDEST + int(MonBloc%NROW-IPIVBEG+1,8)
@@ -514,7 +514,7 @@ C
             ENDDO
          ELSE
             DO II = IPIVBEG, IPIVEND
-               CALL ccopy(MonBloc%NCOL-IPIVBEG+1, 
+               CALL @MUMPS_PREFIX_LOWER@copy(MonBloc%NCOL-IPIVBEG+1, 
      &              AFAC(IPOS), 1,
      &              BUF_IO(IDEST), 1)
                IDEST = IDEST + int(MonBloc%NCOL-IPIVBEG+1,8)
@@ -533,7 +533,7 @@ C
          ENDIF
          IPOS  = 1_8 + int(IPIVBEG - 1,8) * DeltaIPOS
          DO II = IPIVBEG, IPIVEND
-            CALL ccopy(MonBloc%NROW, 
+            CALL @MUMPS_PREFIX_LOWER@copy(MonBloc%NROW, 
      &           AFAC(IPOS), StrideIPOS,
      &           BUF_IO(IDEST), 1)
             IDEST = IDEST+int(MonBloc%NROW,8)
