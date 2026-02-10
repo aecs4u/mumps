@@ -14,7 +14,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-BUILD_CACHE_DIR="${PROJECT_ROOT}/.build-cache"
+
+# Build cache location priority:
+# 1. User-specified via MUMPS_BUILD_CACHE
+# 2. Fast storage at /mnt/mobile/tmp/mumps/ (if available)
+# 3. Default to .build-cache in project root
+if [[ -n "${MUMPS_BUILD_CACHE:-}" ]]; then
+    BUILD_CACHE_DIR="$MUMPS_BUILD_CACHE"
+elif [[ -d "/mnt/mobile/tmp" ]] && [[ -w "/mnt/mobile/tmp" ]]; then
+    BUILD_CACHE_DIR="/mnt/mobile/tmp/mumps/.build-cache"
+    mkdir -p "$BUILD_CACHE_DIR" 2>/dev/null || BUILD_CACHE_DIR="${PROJECT_ROOT}/.build-cache"
+else
+    BUILD_CACHE_DIR="${PROJECT_ROOT}/.build-cache"
+fi
 
 # Build configuration
 BUILD_TYPE="${BUILD:-release}"  # release or debug
@@ -43,7 +55,12 @@ error() {
 
 # Create build cache directory
 init_cache() {
-    mkdir -p "$BUILD_CACHE_DIR"
+    if [[ ! -d "$BUILD_CACHE_DIR" ]]; then
+        mkdir -p "$BUILD_CACHE_DIR"
+        if [[ "$BUILD_CACHE_DIR" == "/mnt/mobile/tmp/mumps/.build-cache" ]]; then
+            log "Initialized build cache on fast storage: $BUILD_CACHE_DIR"
+        fi
+    fi
 }
 
 # Check if build configuration has changed
@@ -376,6 +393,9 @@ Environment Variables:
     BLAS_VENDOR         BLAS vendor: openblas (default), mkl, blis, etc.
     ARITH               Arithmetic precision: s, d (default), c, or z
     MAKE_JOBS           Parallel jobs (default: nproc)
+    MUMPS_BUILD_CACHE   Custom build cache location (default: auto-detect)
+                        Auto-detects: /mnt/mobile/tmp/mumps/.build-cache if available,
+                        otherwise .build-cache in project root
 
 Examples:
     # Build double precision library incrementally
