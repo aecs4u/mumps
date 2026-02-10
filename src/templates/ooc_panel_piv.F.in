@@ -120,7 +120,7 @@ C
 C        Swap rows ISHIFT + I and PIV(I)
          IPERM=IPIV(I)
          IF ( I+ISHIFT.NE.IPERM) THEN
-            CALL cswap(NBCOL,
+            CALL @MUMPS_PREFIX_LOWER@swap(NBCOL,
      &           THE_PANEL(I+ISHIFT-KbeforePanel,1), NBROW,
      &           THE_PANEL(IPERM-KbeforePanel,1), NBROW)
          ENDIF

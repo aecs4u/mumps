@@ -1029,12 +1029,12 @@ C
                 END DO
                 END DO
                 CALL MPI_SEND( WK, SIZE_IBLOCK*SIZE_JBLOCK,
-     &                         MPI_COMPLEX,
+     &                         @MUMPS_MPI_TYPE@,
      &                         IDEST, 128, COMM, IERR )
               ELSE IF ( MYID .EQ. IDEST ) THEN
                 CALL MPI_RECV( WK(1),
      &                         SIZE_IBLOCK*SIZE_JBLOCK,
-     &                         MPI_COMPLEX,
+     &                         @MUMPS_MPI_TYPE@,
      &                         MASTER_ROOT,128,COMM,STATUS,IERR)
                 KK=1
                 DO JJ=JAPAR,JAPAR+SIZE_JBLOCK-1
@@ -1111,7 +1111,7 @@ C
             IF ( ISOUR .NE. MASTER_ROOT ) THEN
               IF ( MYID .EQ. MASTER_ROOT ) THEN
                 CALL MPI_RECV( WK(1), SIZE_IBLOCK*SIZE_JBLOCK,
-     &                         MPI_COMPLEX,
+     &                         @MUMPS_MPI_TYPE@,
      &                         ISOUR, 128, COMM, STATUS, IERR )
                 KK=1
                 DO JJ=J,J+SIZE_JBLOCK-1
@@ -1130,7 +1130,7 @@ C
                 END DO
                 CALL MPI_SEND( WK( 1 ),
      &                         SIZE_IBLOCK*SIZE_JBLOCK,
-     &                         MPI_COMPLEX,
+     &                         @MUMPS_MPI_TYPE@,
      &                         MASTER_ROOT,128,COMM,IERR)
                 JUPDATE = .TRUE.
                 IAPAR = IAPAR + SIZE_IBLOCK
@@ -1196,7 +1196,12 @@ C
       @MUMPS_TYPE@ DBLARR(KEEP8(26))
       INTEGER, EXTERNAL :: MUMPS_NUMROC
       @MUMPS_TYPE@ ZERO
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
       PARAMETER( ZERO = (0.0@MUMPS_REAL_LIT@,0.0@MUMPS_REAL_LIT@) )
+      @ENDIF@
       INTEGER(8) :: LREQA_ROOT
       INTEGER LREQI_ROOT, LOCAL_M, LOCAL_N, allocok
       LOGICAL :: EARLYT3ROOTINS

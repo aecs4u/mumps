@@ -53,7 +53,9 @@ C
       K10 = 8 / K34
       K150 = int(SIZE_REAL_OR_DOUBLE)
       K149 = K150
+      @IF_COMPLEX@
       K149 = K149 * 2
+      @ENDIF@
       RETURN
       END SUBROUTINE @MUMPS_PREFIX@MUMPS_SET_TYPE_SIZES
 C
