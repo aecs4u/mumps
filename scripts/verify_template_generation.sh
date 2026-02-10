@@ -90,8 +90,9 @@ verify_file() {
         gfortran -c -fsyntax-only -ffree-form "$generated_file" 2>"$compile_log"
         local compile_result=$?
 
-        # Check for real syntax errors (ignore module dependency errors)
+        # Check for real syntax errors (ignore dependency errors: modules, includes)
         local syntax_errors=$(grep -v "module file.*for reading" "$compile_log" | \
+                              grep -v "Cannot open included file" | \
                               grep -v "compilation terminated" | \
                               grep -E "Error:|Fatal Error:" | wc -l)
 
