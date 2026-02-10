@@ -58,8 +58,11 @@ class FixedToFreeConverter:
         Fixed-form format:
         - Columns 1-5: Statement label
         - Column 6: Continuation character (non-space, non-zero)
-        - Columns 7-72: Fortran code
-        - Columns 73-80: Sequence numbers (ignored)
+        - Columns 7-72: Fortran code (traditional limit)
+        - Columns 73-80: Sequence numbers (traditionally ignored)
+
+        Note: Modern compilers often allow lines beyond column 72,
+        so we take the entire line as code if it extends past 72.
         """
         # Ensure line is at least 6 characters (pad if needed)
         padded = line.ljust(6)
@@ -71,8 +74,13 @@ class FixedToFreeConverter:
         cont_char = padded[5] if len(padded) > 5 else ' '
         is_continuation = cont_char not in [' ', '0']
 
-        # Column 7-72: Code (column 73+ is sequence numbers, ignored)
-        code = padded[6:72].rstrip() if len(padded) > 6 else ''
+        # Column 7+: Code
+        # Traditional: columns 7-72, but modern code may extend beyond
+        # Take entire line to avoid truncation
+        if len(padded) > 6:
+            code = padded[6:].rstrip()
+        else:
+            code = ''
 
         return label, is_continuation, code
 
