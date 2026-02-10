@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import csv
+import html
+import logging
 import os
 import sqlite3
+import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -17,6 +23,11 @@ RESULTS_DIR = Path(os.getenv("BLAS_BENCH_RESULTS_DIR", PROJECT_ROOT / "benchmark
 DB_PATH = Path(os.getenv("MUMPS_BENCH_DB", os.getenv("BLAS_BENCH_DB", PROJECT_ROOT / "benchmarks" / "mumps_benchmarks.sqlite")))
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+NOT_FOUND_TEMPLATE = "404.html"
+MIGRATION_CACHE_TTL_SECONDS = max(1, int(os.getenv("MUMPS_MIGRATION_CACHE_TTL", "30")))
+LOGGER = logging.getLogger(__name__)
+_MIGRATION_CACHE_LOCK = threading.Lock()
+_MIGRATION_CACHE: dict[str, Any] = {"data": None, "expires_at": 0.0, "last_error": None, "last_error_at": 0.0}
 
 
 def _read_meta(path: Path) -> dict[str, str]:
@@ -52,6 +63,36 @@ def _parse_vendors_field(vendors: str | None) -> list[str]:
     if not vendors:
         return []
     return [v for v in vendors.split() if v]
+
+
+def _count_lines(path: Path) -> int:
+    if not path.exists():
+        return 0
+    try:
+        return len(path.read_text(encoding="utf-8").splitlines())
+    except (OSError, UnicodeDecodeError):
+        return 0
+
+
+def _render_not_found(request: Request, error: str, benchmark_code: str) -> HTMLResponse:
+    context = {
+        "request": request,
+        "results_dir": str(RESULTS_DIR),
+        "db_path": str(DB_PATH),
+        "error": error,
+        "benchmark_code": benchmark_code,
+    }
+    if (TEMPLATES_DIR / NOT_FOUND_TEMPLATE).exists():
+        return templates.TemplateResponse(NOT_FOUND_TEMPLATE, context, status_code=404)
+
+    escaped_error = html.escape(error)
+    escaped_code = html.escape(benchmark_code)
+    body = (
+        "<!doctype html><html><head><title>Not Found</title></head><body>"
+        f"<h1>{escaped_error}</h1><p>Requested benchmark: <code>{escaped_code}</code></p>"
+        '<p><a href="/benchmarks">Back to benchmarks</a></p></body></html>'
+    )
+    return HTMLResponse(content=body, status_code=404)
 
 
 def _latest_run(conn: sqlite3.Connection, benchmark_type: str) -> sqlite3.Row | None:
@@ -513,12 +554,7 @@ async def benchmark_detail(request: Request, benchmark_code: str) -> HTMLRespons
     }
 
     if benchmark_code not in benchmarks_info:
-        context = {
-            "request": request,
-            "error": "Benchmark not found",
-            "benchmark_code": benchmark_code,
-        }
-        return templates.TemplateResponse("404.html", context, status_code=404)
+        return _render_not_found(request, "Benchmark not found", benchmark_code)
 
     benchmark = benchmarks_info[benchmark_code]
 
@@ -592,7 +628,11 @@ async def benchmark_detail(request: Request, benchmark_code: str) -> HTMLRespons
                     }
                     best_performance = {"vendor": perf_data[0][0], "value": f"{perf_data[0][1]:.6f} s"}
                     worst_performance = {"vendor": perf_data[-1][0], "value": f"{perf_data[-1][1]:.6f} s"}
-                    speedup = f"{perf_data[-1][1] / perf_data[0][1]:.2f}"
+                    # Guard against divide-by-zero
+                    if perf_data[0][1] > 0:
+                        speedup = f"{perf_data[-1][1] / perf_data[0][1]:.2f}"
+                    else:
+                        speedup = "N/A"
 
                 # Get unique precisions and vendors
                 precisions = conn.execute("SELECT DISTINCT precision FROM sparse_results ORDER BY precision").fetchall()
@@ -624,17 +664,16 @@ async def benchmark_detail(request: Request, benchmark_code: str) -> HTMLRespons
 
 def _collect_migration_status() -> dict[str, Any]:
     """Collect migration status from git and filesystem."""
-    import subprocess
-
     # Fortran templates status
     templates_dir = PROJECT_ROOT / "src" / "templates"
-    fortran_templates = list(templates_dir.glob("*.F.in")) if templates_dir.exists() else []
-    modern_templates = list(templates_dir.glob("*.f90.in")) if templates_dir.exists() else []
+    fortran_templates = sorted(templates_dir.glob("*.F.in")) if templates_dir.exists() else []
+    modern_templates = sorted(templates_dir.glob("*.f90.in")) if templates_dir.exists() else []
 
     # C files status
-    c_files = []
+    c_files: list[Path] = []
     for pattern in ["src/*.c", "PORD/lib/*.c", "libseq/*.c"]:
         c_files.extend(PROJECT_ROOT.glob(pattern))
+    c_files = sorted(set(c_files))
 
     # Count modernized files by checking git log
     fortran_modernized = []
@@ -668,7 +707,7 @@ def _collect_migration_status() -> dict[str, Any]:
     # Add Fortran templates
     for tmpl in fortran_templates:
         is_modern = tmpl in fortran_modernized or any(m.stem == tmpl.stem for m in modern_templates)
-        lines = len(tmpl.read_text(encoding='utf-8').splitlines()) if tmpl.exists() else 0
+        lines = _count_lines(tmpl)
         files.append({
             "name": tmpl.name,
             "type": "Fortran Template",
@@ -680,7 +719,7 @@ def _collect_migration_status() -> dict[str, Any]:
         })
 
     for tmpl in modern_templates:
-        lines = len(tmpl.read_text(encoding='utf-8').splitlines()) if tmpl.exists() else 0
+        lines = _count_lines(tmpl)
         files.append({
             "name": tmpl.name,
             "type": "Fortran Template",
@@ -692,9 +731,9 @@ def _collect_migration_status() -> dict[str, Any]:
         })
 
     # Add C files
-    for c_file in c_files[:100]:  # Limit to first 100 for performance
+    for c_file in c_files:
         is_modern = c_file in c_modernized
-        lines = len(c_file.read_text(encoding='utf-8').splitlines()) if c_file.exists() else 0
+        lines = _count_lines(c_file)
         files.append({
             "name": c_file.name,
             "type": "C Source",
@@ -729,15 +768,64 @@ def _collect_migration_status() -> dict[str, Any]:
     }
 
 
+def _empty_migration_status() -> dict[str, Any]:
+    return {
+        "kpis": {
+            "overall_progress": 0.0,
+            "fortran_progress": 0.0,
+            "c_progress": 0.0,
+            "total_files": 0,
+            "completed_files": 0,
+            "pending_files": 0,
+            "fortran_total": 0,
+            "fortran_done": 0,
+            "c_total": 0,
+            "c_done": 0,
+        },
+        "files": [],
+        "categories": ["template", "c_source"],
+        "statuses": ["Completed", "Pending", "Already Modern"],
+    }
+
+
+def _collect_migration_status_cached(refresh: bool = False) -> dict[str, Any]:
+    now = time.time()
+    with _MIGRATION_CACHE_LOCK:
+        cached_data = _MIGRATION_CACHE.get("data")
+        cache_expiry = float(_MIGRATION_CACHE.get("expires_at", 0.0))
+        if not refresh and cached_data is not None and now < cache_expiry:
+            return cached_data
+
+    try:
+        data = _collect_migration_status()
+    except Exception as exc:
+        LOGGER.exception("Failed to collect migration status")
+        with _MIGRATION_CACHE_LOCK:
+            stale_data = _MIGRATION_CACHE.get("data")
+            _MIGRATION_CACHE["last_error"] = str(exc)
+            _MIGRATION_CACHE["last_error_at"] = now
+        if stale_data is not None:
+            return stale_data
+        return _empty_migration_status()
+
+    with _MIGRATION_CACHE_LOCK:
+        _MIGRATION_CACHE["data"] = data
+        _MIGRATION_CACHE["expires_at"] = now + MIGRATION_CACHE_TTL_SECONDS
+        _MIGRATION_CACHE["last_error"] = None
+        _MIGRATION_CACHE["last_error_at"] = 0.0
+    return data
+
+
 @app.get("/migration", response_class=HTMLResponse)
 async def migration_status(
     request: Request,
     file_type: str | None = None,
     status: str | None = None,
-    category: str | None = None
+    category: str | None = None,
+    refresh: bool = False,
 ) -> HTMLResponse:
     """Migration status dashboard with KPIs and filters."""
-    data = _collect_migration_status()
+    data = await run_in_threadpool(_collect_migration_status_cached, refresh)
 
     # Apply filters
     files = data["files"]
@@ -767,7 +855,8 @@ async def migration_status(
 @app.get("/api/migration", response_class=JSONResponse)
 async def api_migration_status() -> JSONResponse:
     """API endpoint for migration status data."""
-    return JSONResponse(_collect_migration_status())
+    data = await run_in_threadpool(_collect_migration_status_cached, False)
+    return JSONResponse(data)
 
 
 @app.get("/health", response_class=JSONResponse)
