@@ -148,9 +148,13 @@ class FixedToFreeConverter:
 
             # Add trailing & if next line continues
             if next_is_continuation and not is_blank:
-                # Don't add & if line already ends with & or is a comment
+                # Don't add & if line already ends with &, is a comment, or is a preprocessor directive
                 stripped = line.rstrip()
-                if not stripped.endswith('&') and not stripped.lstrip().startswith('!'):
+                is_comment = stripped.lstrip().startswith('!')
+                is_preprocessor = stripped.lstrip().startswith('#')
+                is_template_cond = stripped.startswith('@IF_') or stripped.startswith('@ENDIF@')
+
+                if not stripped.endswith('&') and not is_comment and not is_preprocessor and not is_template_cond:
                     line = line + ' &'
 
             processed.append(line)
