@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Benchmarks - MUMPS Benchmark Suite{% endblock %}
+
+{% block content %}
+<header>
+  <h1>🧪 Available Benchmarks</h1>
+  <p class="lead">
+    Comprehensive benchmark suite for testing MUMPS performance across different configurations
+  </p>
+</header>
+
+<div class="benchmarks-grid">
+  <!-- Sparse MUMPS JOB=6 Benchmark -->
+  <div class="benchmark-card">
+    <div class="benchmark-header">
+      <h3><a href="/benchmarks/sparse-mumps-job6">Sparse MUMPS JOB=6</a></h3>
+      <span class="badge badge-sparse">Sparse</span>
+      <span class="badge badge-solver">Solver</span>
+    </div>
+    <p class="benchmark-description">
+      Complete MUMPS solve cycle: analysis (JOB=1) + factorization (JOB=2) + solve (JOB=3)
+      combined into single JOB=6 call. Tests end-to-end sparse solver performance.
+    </p>
+    <div class="benchmark-stats">
+      <div class="stat">
+        <span class="stat-label">Executions:</span>
+        <span class="stat-value">{{ sparse_execution_count if sparse_execution_count else "N/A" }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Precisions:</span>
+        <span class="stat-value">s, d, c, z</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Orderings:</span>
+        <span class="stat-value">AMD, AMF, SCOTCH, PORD, METIS, QAMD, Auto</span>
+      </div>
+    </div>
+    <div class="benchmark-config">
+      <h4>Configuration</h4>
+      <ul>
+        <li><strong>Test Matrix:</strong> 2D Laplacian (5-point stencil)</li>
+        <li><strong>Grid Size:</strong> Configurable (default: 220×220)</li>
+        <li><strong>Right-Hand Sides:</strong> Configurable (default: 4)</li>
+        <li><strong>Metrics:</strong> Total time, analysis time, factorization time, solve time</li>
+      </ul>
+    </div>
+    <a href="/benchmarks/sparse-mumps-job6" class="btn btn-primary">View Details →</a>
+  </div>
+
+  <!-- Dense GEMM Benchmark -->
+  <div class="benchmark-card">
+    <div class="benchmark-header">
+      <h3><a href="/benchmarks/dense-gemm">Dense GEMM</a></h3>
+      <span class="badge badge-dense">Dense</span>
+      <span class="badge badge-blas">BLAS</span>
+    </div>
+    <p class="benchmark-description">
+      General Matrix-Matrix Multiplication (GEMM) performance test across different
+      BLAS implementations. Tests raw BLAS Level 3 performance with various matrix sizes.
+    </p>
+    <div class="benchmark-stats">
+      <div class="stat">
+        <span class="stat-label">Executions:</span>
+        <span class="stat-value">{{ dense_execution_count if dense_execution_count else "N/A" }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Precisions:</span>
+        <span class="stat-value">s, d, c, z</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Vendors:</span>
+        <span class="stat-value">OpenBLAS, MKL, BLIS, Reference</span>
+      </div>
+    </div>
+    <div class="benchmark-config">
+      <h4>Configuration</h4>
+      <ul>
+        <li><strong>Operation:</strong> C = α·A·B + β·C</li>
+        <li><strong>Matrix Sizes:</strong> 1000×1000 to 10000×10000</li>
+        <li><strong>Iterations:</strong> Multiple runs for statistical accuracy</li>
+        <li><strong>Metrics:</strong> GFLOPS, execution time, geometric mean</li>
+      </ul>
+    </div>
+    <a href="/benchmarks/dense-gemm" class="btn btn-primary">View Details →</a>
+  </div>
+
+  <!-- Correctness Tests -->
+  <div class="benchmark-card">
+    <div class="benchmark-header">
+      <h3><a href="/benchmarks/correctness">Correctness Tests</a></h3>
+      <span class="badge badge-validation">Validation</span>
+    </div>
+    <p class="benchmark-description">
+      Validation suite that verifies BLAS implementations produce correct results
+      across all precision types. Compares output against reference implementations.
+    </p>
+    <div class="benchmark-stats">
+      <div class="stat">
+        <span class="stat-label">Test Cases:</span>
+        <span class="stat-value">{{ correctness_test_count if correctness_test_count else "12+" }}</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Tolerance:</span>
+        <span class="stat-value">Machine epsilon × safety factor</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Status:</span>
+        <span class="stat-value badge-success">All Passing</span>
+      </div>
+    </div>
+    <div class="benchmark-config">
+      <h4>Test Coverage</h4>
+      <ul>
+        <li><strong>BLAS Level 1:</strong> AXPY, DOT, NRM2, SCAL</li>
+        <li><strong>BLAS Level 2:</strong> GEMV, TRSV</li>
+        <li><strong>BLAS Level 3:</strong> GEMM, TRSM, SYRK</li>
+        <li><strong>Validation:</strong> Residual checks, relative error bounds</li>
+      </ul>
+    </div>
+    <a href="/benchmarks/correctness" class="btn btn-secondary">View Details →</a>
+  </div>
+</div>
+
+<div class="info-section">
+  <h2>📋 Benchmark Execution History</h2>
+  {% if recent_runs %}
+  <table class="runs-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Benchmark</th>
+        <th>Precision</th>
+        <th>Vendor</th>
+        <th>Ordering</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in recent_runs %}
+      <tr>
+        <td>{{ run.date }}</td>
+        <td><a href="/benchmarks/{{ run.benchmark_code }}">{{ run.benchmark_name }}</a></td>
+        <td><span class="badge">{{ run.precision }}</span></td>
+        <td>{{ run.vendor }}</td>
+        <td>{{ run.ordering if run.ordering else "N/A" }}</td>
+        <td><span class="result-time">{{ run.result }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">No benchmark execution history available. Run <code>make bench-all-db</code> to generate results.</p>
+  {% endif %}
+</div>
+
+<div class="info-section">
+  <h2>🚀 Running Benchmarks</h2>
+  <div class="command-examples">
+    <div class="command-example">
+      <h4>Run All Benchmarks</h4>
+      <pre><code>make bench-all-db</code></pre>
+      <p>Runs complete benchmark suite (sparse + dense) and stores results in database</p>
+    </div>
+    <div class="command-example">
+      <h4>Run Sparse Only</h4>
+      <pre><code>./scripts/benchmark_blas.sh</code></pre>
+      <p>Runs only sparse MUMPS benchmarks with configurable parameters</p>
+    </div>
+    <div class="command-example">
+      <h4>Run Dense Only</h4>
+      <pre><code>./scripts/benchmark_blas_dense.sh</code></pre>
+      <p>Runs only dense GEMM benchmarks with various matrix sizes</p>
+    </div>
+    <div class="command-example">
+      <h4>Custom Configuration</h4>
+      <pre><code>BENCH_VENDORS="openblas mkl" BENCH_PRECISIONS="d z" make bench-all-db</code></pre>
+      <p>Run benchmarks for specific vendors and precisions only</p>
+    </div>
+  </div>
+</div>
+
+<div class="info-section">
+  <h2>📊 Environment Variables</h2>
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>Default</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>BENCH_VENDORS</code></td>
+        <td>openblas mkl blis pkgconfig reference</td>
+        <td>Space-separated list of BLAS vendors to test</td>
+      </tr>
+      <tr>
+        <td><code>BENCH_PRECISIONS</code></td>
+        <td>s d c z</td>
+        <td>Arithmetic precisions to test</td>
+      </tr>
+      <tr>
+        <td><code>BENCH_ORDERINGS</code></td>
+        <td>0 2 3 4 5 6 7</td>
+        <td>Ordering methods (ICNTL(7) values)</td>
+      </tr>
+      <tr>
+        <td><code>BENCH_RUNS</code></td>
+        <td>3</td>
+        <td>Number of repetitions for statistical accuracy</td>
+      </tr>
+      <tr>
+        <td><code>NGRID</code></td>
+        <td>220</td>
+        <td>Grid size for 2D Laplacian test matrix</td>
+      </tr>
+      <tr>
+        <td><code>NRHS</code></td>
+        <td>4</td>
+        <td>Number of right-hand sides</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}

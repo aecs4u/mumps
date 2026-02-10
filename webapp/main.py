@@ -264,7 +264,44 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request, precision: str = "d", ordering: str = "Auto") -> HTMLResponse:
+async def index(request: Request) -> HTMLResponse:
+    """Landing page with overview and navigation."""
+    # Get quick stats from database if available
+    benchmark_count = 0
+    vendor_count = 0
+    precision_count = 4
+    ordering_count = 7
+
+    if DB_PATH.exists():
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                # Count distinct vendors
+                result = conn.execute("SELECT COUNT(DISTINCT vendor) FROM sparse_results").fetchone()
+                if result:
+                    vendor_count = result[0]
+                # Count benchmark runs
+                result = conn.execute("SELECT COUNT(*) FROM benchmark_runs").fetchone()
+                if result:
+                    benchmark_count = result[0]
+        except sqlite3.DatabaseError:
+            pass
+
+    context = {
+        "request": request,
+        "results_dir": str(RESULTS_DIR),
+        "db_path": str(DB_PATH),
+        "benchmark_count": benchmark_count if benchmark_count > 0 else None,
+        "vendor_count": vendor_count if vendor_count > 0 else None,
+        "precision_count": precision_count,
+        "ordering_count": ordering_count,
+    }
+    return templates.TemplateResponse("index.html", context)
+
+
+@app.get("/results", response_class=HTMLResponse)
+async def results(request: Request, precision: str = "d", ordering: str = "Auto") -> HTMLResponse:
+    """Benchmark results page (moved from old index)."""
     # Validate precision
     if precision not in ['s', 'd', 'c', 'z']:
         precision = 'd'
@@ -313,7 +350,7 @@ async def index(request: Request, precision: str = "d", ordering: str = "Auto") 
         "precision_names": precision_names,
         "ordering_descriptions": ordering_descriptions,
     }
-    return templates.TemplateResponse("index.html", context)
+    return templates.TemplateResponse("results.html", context)
 
 
 @app.get("/api/results", response_class=JSONResponse)
@@ -326,6 +363,263 @@ async def api_results() -> JSONResponse:
             "dense": load_dense_results(),
         }
     )
+
+
+@app.get("/modules", response_class=HTMLResponse)
+async def modules(request: Request) -> HTMLResponse:
+    """Sparse matrix modules information page."""
+    context = {
+        "request": request,
+        "results_dir": str(RESULTS_DIR),
+        "db_path": str(DB_PATH),
+    }
+    return templates.TemplateResponse("modules.html", context)
+
+
+@app.get("/benchmarks", response_class=HTMLResponse)
+async def benchmarks(request: Request) -> HTMLResponse:
+    """List of available benchmarks."""
+    # Get execution counts and recent runs from database
+    sparse_execution_count = 0
+    dense_execution_count = 0
+    recent_runs = []
+
+    if DB_PATH.exists():
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                # Count executions
+                result = conn.execute("SELECT COUNT(*) FROM sparse_results").fetchone()
+                if result:
+                    sparse_execution_count = result[0]
+                result = conn.execute("SELECT COUNT(*) FROM dense_scores").fetchone()
+                if result:
+                    dense_execution_count = result[0]
+
+                # Get recent runs
+                recent_query = """
+                    SELECT
+                        br.generated_at_utc as date,
+                        'sparse-mumps-job6' as benchmark_code,
+                        'Sparse MUMPS JOB=6' as benchmark_name,
+                        sr.precision,
+                        sr.vendor,
+                        sr.ordering,
+                        printf('%.6f s', sr.median_s) as result
+                    FROM benchmark_runs br
+                    JOIN sparse_results sr ON br.id = sr.run_id
+                    WHERE br.benchmark_type = 'sparse'
+                    ORDER BY br.generated_at_utc DESC
+                    LIMIT 10
+                """
+                recent_runs = [dict(row) for row in conn.execute(recent_query).fetchall()]
+        except sqlite3.DatabaseError:
+            pass
+
+    context = {
+        "request": request,
+        "results_dir": str(RESULTS_DIR),
+        "db_path": str(DB_PATH),
+        "sparse_execution_count": sparse_execution_count if sparse_execution_count > 0 else None,
+        "dense_execution_count": dense_execution_count if dense_execution_count > 0 else None,
+        "recent_runs": recent_runs,
+    }
+    return templates.TemplateResponse("benchmarks.html", context)
+
+
+@app.get("/benchmarks/{benchmark_code}", response_class=HTMLResponse)
+async def benchmark_detail(request: Request, benchmark_code: str) -> HTMLResponse:
+    """Detailed view of a specific benchmark."""
+    # Define benchmark metadata
+    benchmarks_info = {
+        "sparse-mumps-job6": {
+            "name": "Sparse MUMPS JOB=6",
+            "code": "sparse-mumps-job6",
+            "category": "Sparse Solver",
+            "description": "Complete MUMPS solve cycle: analysis + factorization + solve",
+            "badges": [
+                {"type": "sparse", "label": "Sparse"},
+                {"type": "solver", "label": "Solver"},
+            ],
+            "config_html": """
+                <ul>
+                    <li><strong>Test Matrix:</strong> 2D Laplacian (5-point stencil)</li>
+                    <li><strong>Grid Size:</strong> Configurable (default: 220×220 = 48,400 equations)</li>
+                    <li><strong>Matrix Size:</strong> N×N sparse matrix</li>
+                    <li><strong>Right-Hand Sides:</strong> Configurable (default: 4)</li>
+                    <li><strong>MUMPS JOB:</strong> JOB=6 (all-in-one: analyze, factor, solve)</li>
+                    <li><strong>Metrics:</strong> Total execution time in seconds</li>
+                </ul>
+            """,
+            "run_command": "./scripts/benchmark_blas.sh",
+            "run_help": "Runs sparse benchmark with default settings. Customize with environment variables (NGRID, NRHS, etc.)",
+            "related": [
+                {"code": "dense-gemm", "name": "Dense GEMM"},
+                {"code": "correctness", "name": "Correctness Tests"},
+            ],
+            "docs": [
+                {"title": "MUMPS User Guide", "url": "/doc/userguide_5.8.2.pdf"},
+                {"title": "Benchmark Guide", "url": "/docs/INCREMENTAL_BUILD_GUIDE.md"},
+            ],
+        },
+        "dense-gemm": {
+            "name": "Dense GEMM",
+            "code": "dense-gemm",
+            "category": "Dense BLAS",
+            "description": "General Matrix-Matrix Multiplication performance test",
+            "badges": [
+                {"type": "dense", "label": "Dense"},
+                {"type": "blas", "label": "BLAS"},
+            ],
+            "config_html": """
+                <ul>
+                    <li><strong>Operation:</strong> C = α·A·B + β·C</li>
+                    <li><strong>Matrix Sizes:</strong> 1000×1000 to 10000×10000</li>
+                    <li><strong>Layouts:</strong> Row-major (C) and Column-major (Fortran)</li>
+                    <li><strong>Iterations:</strong> Multiple runs for statistical accuracy</li>
+                    <li><strong>Metrics:</strong> GFLOPS, execution time, geometric mean</li>
+                </ul>
+            """,
+            "run_command": "./scripts/benchmark_blas_dense.sh",
+            "run_help": "Runs dense GEMM benchmarks across multiple matrix sizes",
+            "related": [
+                {"code": "sparse-mumps-job6", "name": "Sparse MUMPS JOB=6"},
+            ],
+            "docs": [
+                {"title": "BLAS Reference", "url": "http://www.netlib.org/blas/"},
+            ],
+        },
+        "correctness": {
+            "name": "Correctness Tests",
+            "code": "correctness",
+            "category": "Validation",
+            "description": "BLAS implementation correctness verification",
+            "badges": [
+                {"type": "validation", "label": "Validation"},
+            ],
+            "config_html": """
+                <ul>
+                    <li><strong>Test Coverage:</strong> BLAS Level 1, 2, and 3 routines</li>
+                    <li><strong>Validation Method:</strong> Residual checks against reference</li>
+                    <li><strong>Tolerance:</strong> Machine epsilon with safety factor</li>
+                    <li><strong>Test Cases:</strong> Various matrix sizes and data patterns</li>
+                </ul>
+            """,
+            "run_command": "./scripts/check_blas_correctness.sh",
+            "run_help": "Validates BLAS implementations for numerical correctness",
+            "related": [],
+            "docs": [],
+        },
+    }
+
+    if benchmark_code not in benchmarks_info:
+        context = {
+            "request": request,
+            "error": "Benchmark not found",
+            "benchmark_code": benchmark_code,
+        }
+        return templates.TemplateResponse("404.html", context, status_code=404)
+
+    benchmark = benchmarks_info[benchmark_code]
+
+    # Load execution data from database
+    executions = []
+    statistics = []
+    execution_data = None
+    execution_count = 0
+    latest_run = None
+    precisions_tested = "N/A"
+    vendors_tested = "N/A"
+    best_performance = {"vendor": "N/A", "value": "N/A"}
+    worst_performance = {"vendor": "N/A", "value": "N/A"}
+    speedup = "N/A"
+
+    if DB_PATH.exists() and benchmark_code == "sparse-mumps-job6":
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.row_factory = sqlite3.Row
+                # Get executions
+                exec_query = """
+                    SELECT
+                        br.generated_at_utc as timestamp,
+                        sr.precision,
+                        sr.vendor,
+                        sr.ordering,
+                        printf('%.6f s', sr.median_s) as result,
+                        'success' as status
+                    FROM benchmark_runs br
+                    JOIN sparse_results sr ON br.id = sr.run_id
+                    WHERE br.benchmark_type = 'sparse'
+                    ORDER BY br.generated_at_utc DESC
+                    LIMIT 50
+                """
+                executions = [dict(row) for row in conn.execute(exec_query).fetchall()]
+                execution_count = len(executions)
+
+                if execution_count > 0:
+                    latest_run = executions[0]["timestamp"]
+
+                # Get statistics
+                stats_query = """
+                    SELECT
+                        vendor,
+                        printf('%.6f', AVG(median_s)) as mean,
+                        printf('%.6f', median_s) as median,
+                        printf('%.6f', MIN(median_s)) as min,
+                        printf('%.6f', MAX(median_s)) as max,
+                        COUNT(*) as sample_count,
+                        'N/A' as std_dev
+                    FROM sparse_results
+                    GROUP BY vendor
+                    ORDER BY AVG(median_s)
+                """
+                statistics = [dict(row) for row in conn.execute(stats_query).fetchall()]
+
+                # Get performance data for chart
+                perf_query = """
+                    SELECT vendor, AVG(median_s) as avg_time
+                    FROM sparse_results
+                    GROUP BY vendor
+                    ORDER BY avg_time
+                """
+                perf_data = conn.execute(perf_query).fetchall()
+                if perf_data:
+                    execution_data = {
+                        "labels": [row[0] for row in perf_data],
+                        "values": [row[1] for row in perf_data],
+                        "metric": "Average Time",
+                        "y_label": "Time (seconds)",
+                    }
+                    best_performance = {"vendor": perf_data[0][0], "value": f"{perf_data[0][1]:.6f} s"}
+                    worst_performance = {"vendor": perf_data[-1][0], "value": f"{perf_data[-1][1]:.6f} s"}
+                    speedup = f"{perf_data[-1][1] / perf_data[0][1]:.2f}"
+
+                # Get unique precisions and vendors
+                precisions = conn.execute("SELECT DISTINCT precision FROM sparse_results ORDER BY precision").fetchall()
+                precisions_tested = ", ".join([row[0] for row in precisions])
+                vendors = conn.execute("SELECT DISTINCT vendor FROM sparse_results").fetchall()
+                vendors_tested = str(len(vendors))
+
+        except sqlite3.DatabaseError as e:
+            print(f"Database error: {e}")
+
+    context = {
+        "request": request,
+        "results_dir": str(RESULTS_DIR),
+        "db_path": str(DB_PATH),
+        "benchmark": benchmark,
+        "executions": executions,
+        "statistics": statistics,
+        "execution_data": execution_data,
+        "execution_count": execution_count,
+        "latest_run": latest_run,
+        "precisions_tested": precisions_tested,
+        "vendors_tested": vendors_tested,
+        "best_performance": best_performance,
+        "worst_performance": worst_performance,
+        "speedup": speedup,
+    }
+    return templates.TemplateResponse("benchmark_detail.html", context)
 
 
 @app.get("/health", response_class=JSONResponse)

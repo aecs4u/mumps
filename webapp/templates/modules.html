@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Sparse Matrix Modules - MUMPS Benchmark Suite{% endblock %}
+
+{% block content %}
+<header>
+  <h1>🧩 Sparse Matrix Modules</h1>
+  <p class="lead">
+    Libraries and algorithms used by MUMPS for sparse matrix operations
+  </p>
+</header>
+
+<div class="modules-grid">
+  <!-- AMD -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>AMD</h3>
+      <span class="badge badge-ordering">Ordering</span>
+    </div>
+    <h4>Approximate Minimum Degree</h4>
+    <p>
+      <strong>AMD</strong> is an ordering algorithm that computes a permutation
+      to reduce fill-in during sparse matrix factorization. It uses an
+      approximate minimum degree heuristic that is faster than exact minimum
+      degree algorithms while providing similar fill-in reduction.
+    </p>
+    <div class="module-details">
+      <p><strong>Author:</strong> Timothy A. Davis, Patrick R. Amestoy, Iain S. Duff</p>
+      <p><strong>Use in MUMPS:</strong> ICNTL(7) = 0</p>
+      <p><strong>Best for:</strong> Symmetric matrices, general sparse systems</p>
+      <p><strong>Complexity:</strong> O(n × d²) where d is max degree</p>
+    </div>
+  </div>
+
+  <!-- AMF -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>AMF</h3>
+      <span class="badge badge-ordering">Ordering</span>
+    </div>
+    <h4>Approximate Minimum Fill</h4>
+    <p>
+      <strong>AMF</strong> ordering aims to minimize fill-in during factorization
+      by selecting elimination order that produces minimal new non-zeros. It provides
+      better fill-in reduction than AMD at the cost of additional computation time.
+    </p>
+    <div class="module-details">
+      <p><strong>Use in MUMPS:</strong> ICNTL(7) = 2</p>
+      <p><strong>Best for:</strong> Matrices where fill-in is critical, smaller problems</p>
+      <p><strong>Trade-off:</strong> Better ordering quality, slower computation</p>
+    </div>
+  </div>
+
+  <!-- CHOLMOD -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>CHOLMOD</h3>
+      <span class="badge badge-solver">Solver</span>
+    </div>
+    <h4>Sparse Cholesky Factorization</h4>
+    <p>
+      <strong>CHOLMOD</strong> is a set of routines for factorizing sparse symmetric
+      positive definite matrices. It provides high-performance Cholesky factorization
+      with sophisticated memory management and multiple ordering strategies.
+    </p>
+    <div class="module-details">
+      <p><strong>Author:</strong> Timothy A. Davis</p>
+      <p><strong>Part of:</strong> SuiteSparse collection</p>
+      <p><strong>Best for:</strong> SPD matrices, least squares problems</p>
+      <p><strong>Features:</strong> Supernodal, simplicial, GPU acceleration</p>
+    </div>
+  </div>
+
+  <!-- UMFPACK -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>UMFPACK</h3>
+      <span class="badge badge-solver">Solver</span>
+    </div>
+    <h4>Unsymmetric MultiFrontal Package</h4>
+    <p>
+      <strong>UMFPACK</strong> provides direct solution of sparse unsymmetric
+      linear systems using the multifrontal method. It's optimized for general
+      sparse matrices and includes sophisticated pivoting strategies.
+    </p>
+    <div class="module-details">
+      <p><strong>Author:</strong> Timothy A. Davis</p>
+      <p><strong>Part of:</strong> SuiteSparse collection</p>
+      <p><strong>Best for:</strong> General unsymmetric sparse systems</p>
+      <p><strong>Method:</strong> Multifrontal QR with column pre-ordering</p>
+    </div>
+  </div>
+
+  <!-- METIS -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>METIS</h3>
+      <span class="badge badge-ordering">Ordering</span>
+      <span class="badge badge-partitioning">Partitioning</span>
+    </div>
+    <h4>Graph Partitioning and Fill-Reducing Ordering</h4>
+    <p>
+      <strong>METIS</strong> provides graph partitioning and sparse matrix ordering
+      algorithms based on multilevel graph partitioning. It produces high-quality
+      orderings that reduce both fill-in and operation count.
+    </p>
+    <div class="module-details">
+      <p><strong>Author:</strong> George Karypis, Vipin Kumar (University of Minnesota)</p>
+      <p><strong>Use in MUMPS:</strong> ICNTL(7) = 5</p>
+      <p><strong>Best for:</strong> Large-scale problems, parallel computing</p>
+      <p><strong>Method:</strong> Multilevel k-way partitioning</p>
+    </div>
+  </div>
+
+  <!-- SCOTCH -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>SCOTCH</h3>
+      <span class="badge badge-ordering">Ordering</span>
+      <span class="badge badge-partitioning">Partitioning</span>
+    </div>
+    <h4>Graph and Mesh Partitioning</h4>
+    <p>
+      <strong>SCOTCH</strong> (PT-SCOTCH for parallel) provides graph partitioning
+      and static mapping algorithms. It offers multiple ordering strategies optimized
+      for both sequential and parallel sparse matrix computations.
+    </p>
+    <div class="module-details">
+      <p><strong>Author:</strong> François Pellegrini (Université de Bordeaux)</p>
+      <p><strong>Use in MUMPS:</strong> ICNTL(7) = 3</p>
+      <p><strong>Best for:</strong> Parallel computing, mesh-based problems</p>
+      <p><strong>Features:</strong> Multi-level, multi-criteria optimization</p>
+    </div>
+  </div>
+
+  <!-- PORD -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>PORD</h3>
+      <span class="badge badge-ordering">Ordering</span>
+    </div>
+    <h4>PORD Ordering Library</h4>
+    <p>
+      <strong>PORD</strong> is a simple ordering library bundled with MUMPS.
+      It provides basic nested dissection ordering without external dependencies,
+      useful when other ordering libraries are not available.
+    </p>
+    <div class="module-details">
+      <p><strong>Author:</strong> Jürgen Schulze (University of Paderborn)</p>
+      <p><strong>Use in MUMPS:</strong> ICNTL(7) = 4</p>
+      <p><strong>Best for:</strong> No external dependencies, moderate-size problems</p>
+      <p><strong>Method:</strong> Nested dissection</p>
+    </div>
+  </div>
+
+  <!-- QAMD -->
+  <div class="module-card">
+    <div class="module-header">
+      <h3>QAMD</h3>
+      <span class="badge badge-ordering">Ordering</span>
+    </div>
+    <h4>AMD with Quasi-Dense Row Detection</h4>
+    <p>
+      <strong>QAMD</strong> enhances AMD ordering by detecting and handling
+      quasi-dense rows separately. This improves performance for matrices with
+      rows that are nearly dense, common in certain applications.
+    </p>
+    <div class="module-details">
+      <p><strong>Use in MUMPS:</strong> ICNTL(7) = 6</p>
+      <p><strong>Best for:</strong> Matrices with quasi-dense rows/columns</p>
+      <p><strong>Enhancement:</strong> Automatic detection and special handling</p>
+    </div>
+  </div>
+</div>
+
+<div class="info-section">
+  <h2>🔗 Ordering Method Comparison</h2>
+  <table class="comparison-table">
+    <thead>
+      <tr>
+        <th>Method</th>
+        <th>ICNTL(7)</th>
+        <th>Speed</th>
+        <th>Quality</th>
+        <th>Best Use Case</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>AMD</strong></td>
+        <td>0</td>
+        <td>⚡⚡⚡</td>
+        <td>⭐⭐⭐</td>
+        <td>General purpose, fast ordering</td>
+      </tr>
+      <tr>
+        <td><strong>AMF</strong></td>
+        <td>2</td>
+        <td>⚡⚡</td>
+        <td>⭐⭐⭐⭐</td>
+        <td>Better fill-in, smaller problems</td>
+      </tr>
+      <tr>
+        <td><strong>SCOTCH</strong></td>
+        <td>3</td>
+        <td>⚡⚡</td>
+        <td>⭐⭐⭐⭐</td>
+        <td>Parallel, large-scale</td>
+      </tr>
+      <tr>
+        <td><strong>PORD</strong></td>
+        <td>4</td>
+        <td>⚡⚡</td>
+        <td>⭐⭐⭐</td>
+        <td>No dependencies, moderate size</td>
+      </tr>
+      <tr>
+        <td><strong>METIS</strong></td>
+        <td>5</td>
+        <td>⚡⚡</td>
+        <td>⭐⭐⭐⭐⭐</td>
+        <td>High quality, parallel</td>
+      </tr>
+      <tr>
+        <td><strong>QAMD</strong></td>
+        <td>6</td>
+        <td>⚡⚡⚡</td>
+        <td>⭐⭐⭐⭐</td>
+        <td>Quasi-dense matrices</td>
+      </tr>
+      <tr>
+        <td><strong>Auto</strong></td>
+        <td>7</td>
+        <td>⚡ (varies)</td>
+        <td>⭐⭐⭐⭐ (adaptive)</td>
+        <td>Let MUMPS choose</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="info-section">
+  <h2>📚 References</h2>
+  <ul class="references">
+    <li>Davis, T. A. (2004). <em>Algorithm 832: UMFPACK V4.3—an unsymmetric-pattern multifrontal method.</em> ACM Transactions on Mathematical Software.</li>
+    <li>Karypis, G., & Kumar, V. (1998). <em>A Fast and High Quality Multilevel Scheme for Partitioning Irregular Graphs.</em> SIAM Journal on Scientific Computing.</li>
+    <li>Pellegrini, F. (2012). <em>SCOTCH and PT-SCOTCH Graph Partitioning Software.</em> Université de Bordeaux.</li>
+    <li>Amestoy, P. R., et al. (2006). <em>Hybrid scheduling for the parallel solution of linear systems.</em> Parallel Computing.</li>
+  </ul>
+</div>
+{% endblock %}

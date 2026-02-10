@@ -1,502 +1,116 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BLAS Benchmark Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  </head>
-  <body>
-    <main class="container">
-      <header>
-        <h1>🚀 BLAS Benchmark Dashboard</h1>
-        <p class="muted">
-          Results: <code>{{ results_dir }}</code> |
-          Database: <code>{{ db_path }}</code>
-        </p>
-      </header>
+{% extends "base.html" %}
 
-      <!-- Filters Section -->
-      <div class="filters-panel">
-        <h3>🔍 Filters</h3>
-        <div class="filter-group">
-          <label for="vendor-filter">Vendor:</label>
-          <select id="vendor-filter" onchange="applyFilters()">
-            <option value="all">All Vendors</option>
-            {% set vendors = [] %}
-            {% for row in sparse.rows %}
-              {% if row.get("vendor") not in vendors %}
-                {% set _ = vendors.append(row.get("vendor")) %}
-              {% endif %}
-            {% endfor %}
-            {% for vendor in vendors %}
-              <option value="{{ vendor }}">{{ vendor }}</option>
-            {% endfor %}
-          </select>
+{% block title %}MUMPS Benchmark Suite - Home{% endblock %}
 
-          <label for="metric-filter">Metric:</label>
-          <select id="metric-filter" onchange="updateCharts()">
-            <option value="median_s">Median Time</option>
-            <option value="mean_s">Mean Time</option>
-            <option value="best_s">Best Time</option>
-          </select>
+{% block content %}
+<div class="hero">
+  <h1>🔬 MUMPS Benchmark Suite</h1>
+  <p class="lead">
+    Comprehensive benchmarking infrastructure for MUMPS sparse solver
+    across multiple BLAS vendors, precisions, and ordering libraries
+  </p>
+</div>
 
-          <label for="view-toggle">View:</label>
-          <select id="view-toggle" onchange="toggleView()">
-            <option value="both">Charts + Tables</option>
-            <option value="charts">Charts Only</option>
-            <option value="tables">Tables Only</option>
-          </select>
-        </div>
-      </div>
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="feature-icon">📊</div>
+    <h3><a href="/results">Benchmark Results</a></h3>
+    <p>
+      View performance metrics for MUMPS sparse and dense operations
+      across different BLAS implementations (OpenBLAS, MKL, AMD BLIS, etc.)
+    </p>
+    <ul class="feature-list">
+      <li>Multi-precision support (s/d/c/z)</li>
+      <li>Multiple ordering libraries (PORD, METIS, SCOTCH, AMD)</li>
+      <li>Interactive charts and tables</li>
+      <li>SQLite database with historical data</li>
+    </ul>
+    <a href="/results" class="btn btn-primary">View Results →</a>
+  </div>
 
-      <!-- Sparse MUMPS Benchmark Section -->
-      <section id="sparse-section">
-        <h2>📊 Sparse MUMPS Benchmark (JOB=6 time)</h2>
-        {% if sparse.meta %}
-          <div class="meta-info">
-            <span><strong>Generated:</strong> {{ sparse.meta.get("generated_at_utc", "n/a") }}</span>
-            <span><strong>Runs:</strong> {{ sparse.meta.get("runs", "n/a") }}</span>
-            <span><strong>Grid:</strong> {{ sparse.meta.get("ngrid", "n/a") }}</span>
-            <span><strong>NRHS:</strong> {{ sparse.meta.get("nrhs", "n/a") }}</span>
-            <span><strong>✅ Recommended:</strong> {{ sparse.meta.get("recommended_vendor", "n/a") }}</span>
-          </div>
-          {% if sparse.missing_vendors %}
-            <p class="warning">⚠️ Missing vendors: <strong>{{ ", ".join(sparse.missing_vendors) }}</strong></p>
-          {% endif %}
-        {% endif %}
+  <div class="feature-card">
+    <div class="feature-icon">🧪</div>
+    <h3><a href="/benchmarks">Benchmarks</a></h3>
+    <p>
+      Explore available benchmarks and their detailed execution history
+      with configurable test parameters
+    </p>
+    <ul class="feature-list">
+      <li>Sparse MUMPS solver benchmarks (JOB=6)</li>
+      <li>Dense BLAS/LAPACK benchmarks (GEMM)</li>
+      <li>Correctness verification tests</li>
+      <li>Execution history tracking</li>
+    </ul>
+    <a href="/benchmarks" class="btn btn-primary">Browse Benchmarks →</a>
+  </div>
 
-        <!-- Sparse Chart -->
-        <div class="chart-container chart-view">
-          <canvas id="sparse-chart"></canvas>
-        </div>
+  <div class="feature-card">
+    <div class="feature-icon">🧩</div>
+    <h3><a href="/modules">Sparse Matrix Modules</a></h3>
+    <p>
+      Learn about the sparse matrix libraries and ordering algorithms
+      used by MUMPS
+    </p>
+    <ul class="feature-list">
+      <li>AMD - Approximate Minimum Degree</li>
+      <li>CHOLMOD - Sparse Cholesky factorization</li>
+      <li>UMFPACK - Unsymmetric multifrontal</li>
+      <li>METIS & SCOTCH partitioners</li>
+    </ul>
+    <a href="/modules" class="btn btn-primary">View Modules →</a>
+  </div>
+</div>
 
-        <!-- Sparse Table -->
-        {% if sparse.rows %}
-          <div class="table-view">
-            <table id="sparse-table">
-              <thead>
-                <tr>
-                  <th onclick="sortTable('sparse-table', 0)">Vendor ⇅</th>
-                  <th onclick="sortTable('sparse-table', 1)">Median (s) ⇅</th>
-                  <th onclick="sortTable('sparse-table', 2)">Mean (s) ⇅</th>
-                  <th onclick="sortTable('sparse-table', 3)">Best (s) ⇅</th>
-                  <th>Runs</th>
-                  <th>Speedup vs Worst</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in sparse.rows %}
-                  <tr data-vendor="{{ row.get('vendor', '') }}">
-                    <td><strong>{{ row.get("vendor", "") }}</strong></td>
-                    <td>{{ "%.6f"|format(row.get("median_s")|float) if row.get("median_s") else "n/a" }}</td>
-                    <td>{{ "%.6f"|format(row.get("mean_s")|float) if row.get("mean_s") else "n/a" }}</td>
-                    <td>{{ "%.6f"|format(row.get("best_s")|float) if row.get("best_s") else "n/a" }}</td>
-                    <td><code>{{ row.get("runs_s", "") }}</code></td>
-                    <td class="speedup" data-median="{{ row.get('median_s', '0') }}"></td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="empty-state">📭 No sparse benchmark results found. Run <code>make bench-blas</code>.</p>
-        {% endif %}
-      </section>
+<div class="info-section">
+  <h2>📈 Quick Stats</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-value">{{ benchmark_count if benchmark_count else "N/A" }}</div>
+      <div class="stat-label">Total Benchmarks</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ precision_count if precision_count else 4 }}</div>
+      <div class="stat-label">Precisions Tested</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ vendor_count if vendor_count else "N/A" }}</div>
+      <div class="stat-label">BLAS Vendors</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ ordering_count if ordering_count else 7 }}</div>
+      <div class="stat-label">Ordering Methods</div>
+    </div>
+  </div>
+</div>
 
-      <!-- Dense BLAS Benchmark Section -->
-      <section id="dense-section">
-        <h2>📈 Dense BLAS Benchmark (DGEMM)</h2>
-        {% if dense.meta %}
-          <div class="meta-info">
-            <span><strong>Generated:</strong> {{ dense.meta.get("generated_at_utc", "n/a") }}</span>
-            <span><strong>Runs:</strong> {{ dense.meta.get("runs", "n/a") }}</span>
-            <span><strong>Cases:</strong> {{ dense.meta.get("cases_file", "n/a") }}</span>
-            <span><strong>✅ Recommended:</strong> {{ dense.meta.get("recommended_vendor", "n/a") }}</span>
-          </div>
-          {% if dense.missing_vendors %}
-            <p class="warning">⚠️ Missing vendors: <strong>{{ ", ".join(dense.missing_vendors) }}</strong></p>
-          {% endif %}
-        {% endif %}
+<div class="info-section">
+  <h2>🚀 Getting Started</h2>
+  <div class="getting-started">
+    <div class="step">
+      <h4>1. Run Benchmarks</h4>
+      <pre><code>make bench-all-db</code></pre>
+      <p>Run complete benchmark suite and store results in SQLite database</p>
+    </div>
+    <div class="step">
+      <h4>2. Start Webapp</h4>
+      <pre><code>make webapp</code></pre>
+      <p>Launch this web interface on <code>http://localhost:9001</code></p>
+    </div>
+    <div class="step">
+      <h4>3. View Results</h4>
+      <pre><code>make webapp-open</code></pre>
+      <p>Open the dashboard in your default browser</p>
+    </div>
+  </div>
+</div>
 
-        <h3>Vendor Ranking (Geomean GFLOP/s)</h3>
-
-        <!-- Dense Scores Chart -->
-        <div class="chart-container chart-view">
-          <canvas id="dense-scores-chart"></canvas>
-        </div>
-
-        <!-- Dense Scores Table -->
-        {% if dense.scores %}
-          <div class="table-view">
-            <table id="dense-scores-table">
-              <thead>
-                <tr>
-                  <th onclick="sortTable('dense-scores-table', 0)">Rank</th>
-                  <th onclick="sortTable('dense-scores-table', 1)">Vendor ⇅</th>
-                  <th onclick="sortTable('dense-scores-table', 2)">Score (GFLOP/s) ⇅</th>
-                  <th>% of Best</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in dense.scores %}
-                  <tr data-vendor="{{ row.get('vendor', '') }}">
-                    <td>{{ loop.index }}</td>
-                    <td><strong>{{ row.get("vendor", "") }}</strong></td>
-                    <td>{{ "%.2f"|format(row.get("score_geomean")|float) if row.get("score_geomean") else "n/a" }}</td>
-                    <td class="percent-best" data-score="{{ row.get('score_geomean', '0') }}"></td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="empty-state">📭 No dense vendor ranking found. Run <code>make bench-blas-dense</code>.</p>
-        {% endif %}
-
-        <h3>Per-Case Performance</h3>
-
-        <!-- Dense Cases Chart -->
-        <div class="chart-container chart-view">
-          <canvas id="dense-cases-chart"></canvas>
-        </div>
-
-        <!-- Dense Cases Table -->
-        {% if dense.cases %}
-          <div class="table-view">
-            <table id="dense-cases-table">
-              <thead>
-                <tr>
-                  <th onclick="sortTable('dense-cases-table', 0)">Vendor ⇅</th>
-                  <th onclick="sortTable('dense-cases-table', 1)">Case ⇅</th>
-                  <th>Matrix Size</th>
-                  <th onclick="sortTable('dense-cases-table', 3)">Time (s) ⇅</th>
-                  <th onclick="sortTable('dense-cases-table', 4)">GFLOP/s ⇅</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in dense.cases %}
-                  <tr data-vendor="{{ row.get('vendor', '') }}" data-case="{{ row.get('case_id', '') }}">
-                    <td><strong>{{ row.get("vendor", "") }}</strong></td>
-                    <td>{{ row.get("case_id", "") }}</td>
-                    <td>{{ row.get("m", "") }}×{{ row.get("n", "") }}×{{ row.get("k", "") }}</td>
-                    <td>{{ "%.4f"|format(row.get("med_sec")|float) if row.get("med_sec") else "n/a" }}</td>
-                    <td>{{ "%.2f"|format(row.get("med_gflops")|float) if row.get("med_gflops") else "n/a" }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <p class="empty-state">📭 No dense per-case results found.</p>
-        {% endif %}
-      </section>
-
-      <footer>
-        <p class="muted">
-          🤖 Generated with Claude Code |
-          <a href="/api/results" target="_blank">JSON API</a> |
-          <a href="https://github.com/aecs4u/mumps" target="_blank">GitHub</a>
-        </p>
-      </footer>
-    </main>
-
-    <script>
-      // Data from server
-      const sparseData = {{ sparse.rows | tojson }};
-      const denseScores = {{ dense.scores | tojson }};
-      const denseCases = {{ dense.cases | tojson }};
-
-      let sparseChart, denseScoresChart, denseCasesChart;
-
-      // Color palette for vendors
-      const vendorColors = {
-        'openblas': '#3498db',
-        'mkl': '#e74c3c',
-        'amd-vitis': '#2ecc71',
-        'pkgconfig': '#f39c12',
-        'reference': '#95a5a6',
-      };
-
-      function getVendorColor(vendor, index) {
-        return vendorColors[vendor.toLowerCase()] || `hsl(${index * 60}, 70%, 50%)`;
-      }
-
-      // Initialize charts
-      function initCharts() {
-        createSparseChart();
-        createDenseScoresChart();
-        createDenseCasesChart();
-        calculateSpeedups();
-        calculatePercentBest();
-      }
-
-      function createSparseChart() {
-        const ctx = document.getElementById('sparse-chart');
-        if (!ctx || sparseData.length === 0) return;
-
-        const metric = document.getElementById('metric-filter').value;
-        const labels = sparseData.map(d => d.vendor);
-        const data = sparseData.map(d => parseFloat(d[metric]) || 0);
-
-        if (sparseChart) sparseChart.destroy();
-
-        sparseChart = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Execution Time (seconds)',
-              data: data,
-              backgroundColor: labels.map((v, i) => getVendorColor(v, i)),
-              borderColor: labels.map((v, i) => getVendorColor(v, i)),
-              borderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-              title: {
-                display: true,
-                text: `Sparse MUMPS Performance (${metric.replace('_', ' ').toUpperCase()})`,
-                font: { size: 16, weight: 'bold' }
-              },
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (context) => `${context.parsed.y.toFixed(6)}s`
-                }
-              }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'Time (seconds)' }
-              }
-            }
-          }
-        });
-      }
-
-      function createDenseScoresChart() {
-        const ctx = document.getElementById('dense-scores-chart');
-        if (!ctx || denseScores.length === 0) return;
-
-        const labels = denseScores.map(d => d.vendor);
-        const data = denseScores.map(d => parseFloat(d.score_geomean) || 0);
-
-        if (denseScoresChart) denseScoresChart.destroy();
-
-        denseScoresChart = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'GFLOP/s',
-              data: data,
-              backgroundColor: labels.map((v, i) => getVendorColor(v, i)),
-              borderColor: labels.map((v, i) => getVendorColor(v, i)),
-              borderWidth: 2
-            }]
-          },
-          options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-              title: {
-                display: true,
-                text: 'Dense GEMM Vendor Ranking (Geomean GFLOP/s)',
-                font: { size: 16, weight: 'bold' }
-              },
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (context) => `${context.parsed.x.toFixed(2)} GFLOP/s`
-                }
-              }
-            },
-            scales: {
-              x: {
-                beginAtZero: true,
-                title: { display: true, text: 'GFLOP/s' }
-              }
-            }
-          }
-        });
-      }
-
-      function createDenseCasesChart() {
-        const ctx = document.getElementById('dense-cases-chart');
-        if (!ctx || denseCases.length === 0) return;
-
-        // Group by vendor
-        const vendorData = {};
-        denseCases.forEach(row => {
-          if (!vendorData[row.vendor]) vendorData[row.vendor] = [];
-          vendorData[row.vendor].push({
-            case: row.case_id,
-            gflops: parseFloat(row.med_gflops) || 0
-          });
-        });
-
-        const cases = [...new Set(denseCases.map(d => d.case_id))].sort();
-        const datasets = Object.keys(vendorData).map((vendor, idx) => {
-          const data = cases.map(c => {
-            const entry = vendorData[vendor].find(e => e.case === c);
-            return entry ? entry.gflops : 0;
-          });
-          return {
-            label: vendor,
-            data: data,
-            borderColor: getVendorColor(vendor, idx),
-            backgroundColor: getVendorColor(vendor, idx) + '80',
-            borderWidth: 2,
-            tension: 0.3
-          };
-        });
-
-        if (denseCasesChart) denseCasesChart.destroy();
-
-        denseCasesChart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: cases,
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-              title: {
-                display: true,
-                text: 'GEMM Performance by Matrix Size',
-                font: { size: 16, weight: 'bold' }
-              },
-              legend: { display: true, position: 'top' },
-              tooltip: {
-                mode: 'index',
-                intersect: false,
-                callbacks: {
-                  label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(2)} GFLOP/s`
-                }
-              }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'GFLOP/s' }
-              },
-              x: {
-                title: { display: true, text: 'Test Case' }
-              }
-            }
-          }
-        });
-      }
-
-      function calculateSpeedups() {
-        const rows = document.querySelectorAll('#sparse-table tbody tr');
-        if (rows.length === 0) return;
-
-        const medians = Array.from(rows).map(row =>
-          parseFloat(row.querySelector('.speedup').dataset.median) || 0
-        ).filter(m => m > 0);
-
-        const worst = Math.max(...medians);
-
-        rows.forEach(row => {
-          const cell = row.querySelector('.speedup');
-          const median = parseFloat(cell.dataset.median) || 0;
-          if (median > 0 && worst > 0) {
-            const speedup = worst / median;
-            cell.textContent = speedup.toFixed(2) + 'x';
-            cell.style.color = speedup > 1.5 ? '#27ae60' : speedup > 1.2 ? '#f39c12' : '#7f8c8d';
-          }
-        });
-      }
-
-      function calculatePercentBest() {
-        const rows = document.querySelectorAll('#dense-scores-table tbody tr');
-        if (rows.length === 0) return;
-
-        const scores = Array.from(rows).map(row =>
-          parseFloat(row.querySelector('.percent-best').dataset.score) || 0
-        ).filter(s => s > 0);
-
-        const best = Math.max(...scores);
-
-        rows.forEach(row => {
-          const cell = row.querySelector('.percent-best');
-          const score = parseFloat(cell.dataset.score) || 0;
-          if (score > 0 && best > 0) {
-            const percent = (score / best) * 100;
-            cell.textContent = percent.toFixed(1) + '%';
-            cell.style.color = percent > 95 ? '#27ae60' : percent > 80 ? '#f39c12' : '#e74c3c';
-          }
-        });
-      }
-
-      function applyFilters() {
-        const vendor = document.getElementById('vendor-filter').value;
-        const tables = ['sparse-table', 'dense-scores-table', 'dense-cases-table'];
-
-        tables.forEach(tableId => {
-          const table = document.getElementById(tableId);
-          if (!table) return;
-
-          const rows = table.querySelectorAll('tbody tr');
-          rows.forEach(row => {
-            const rowVendor = row.dataset.vendor;
-            if (vendor === 'all' || rowVendor === vendor) {
-              row.style.display = '';
-            } else {
-              row.style.display = 'none';
-            }
-          });
-        });
-      }
-
-      function toggleView() {
-        const view = document.getElementById('view-toggle').value;
-        const chartViews = document.querySelectorAll('.chart-view');
-        const tableViews = document.querySelectorAll('.table-view');
-
-        chartViews.forEach(el => el.style.display = (view === 'tables') ? 'none' : 'block');
-        tableViews.forEach(el => el.style.display = (view === 'charts') ? 'none' : 'block');
-      }
-
-      function updateCharts() {
-        createSparseChart();
-      }
-
-      function sortTable(tableId, colIndex) {
-        const table = document.getElementById(tableId);
-        if (!table) return;
-
-        const tbody = table.querySelector('tbody');
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-
-        rows.sort((a, b) => {
-          const aVal = a.cells[colIndex].textContent.trim();
-          const bVal = b.cells[colIndex].textContent.trim();
-
-          const aNum = parseFloat(aVal);
-          const bNum = parseFloat(bVal);
-
-          if (!isNaN(aNum) && !isNaN(bNum)) {
-            return aNum - bNum;
-          }
-          return aVal.localeCompare(bVal);
-        });
-
-        rows.forEach(row => tbody.appendChild(row));
-      }
-
-      // Initialize on page load
-      window.addEventListener('DOMContentLoaded', initCharts);
-    </script>
-  </body>
-</html>
+<div class="info-section">
+  <h2>📚 Documentation</h2>
+  <ul class="doc-links">
+    <li><a href="https://github.com/your-repo/mumps/blob/main/docs/README.md">📖 Complete Documentation</a></li>
+    <li><a href="https://github.com/your-repo/mumps/blob/main/docs/QUICKSTART.md">⚡ Quick Start Guide</a></li>
+    <li><a href="https://github.com/your-repo/mumps/blob/main/docs/TEMPLATE_SYSTEM_GUIDE.md">🔧 Template System</a></li>
+    <li><a href="https://github.com/your-repo/mumps/blob/main/docs/INCREMENTAL_BUILD_GUIDE.md">🏗️ Build System</a></li>
+  </ul>
+</div>
+{% endblock %}

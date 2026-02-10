@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}{{ benchmark.name }} - Benchmark Details{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<header>
+  <div class="breadcrumb">
+    <a href="/benchmarks">Benchmarks</a> / <span>{{ benchmark.name }}</span>
+  </div>
+  <h1>{{ benchmark.name }}</h1>
+  <p class="lead">{{ benchmark.description }}</p>
+  <div class="benchmark-badges">
+    {% for badge in benchmark.badges %}
+    <span class="badge badge-{{ badge.type }}">{{ badge.label }}</span>
+    {% endfor %}
+  </div>
+</header>
+
+<div class="detail-grid">
+  <div class="detail-main">
+    <section class="detail-section">
+      <h2>📊 Performance Overview</h2>
+      {% if execution_data %}
+      <div class="chart-container">
+        <canvas id="performance-chart"></canvas>
+      </div>
+      <div class="performance-summary">
+        <div class="summary-stat">
+          <span class="stat-label">Best Performance:</span>
+          <span class="stat-value">{{ best_performance.vendor }} ({{ best_performance.value }})</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">Worst Performance:</span>
+          <span class="stat-value">{{ worst_performance.vendor }} ({{ worst_performance.value }})</span>
+        </div>
+        <div class="summary-stat">
+          <span class="stat-label">Speedup:</span>
+          <span class="stat-value">{{ speedup }}×</span>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted">No execution data available for this benchmark yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="detail-section">
+      <h2>📜 Execution History</h2>
+      {% if executions %}
+      <table class="executions-table">
+        <thead>
+          <tr>
+            <th>Date/Time</th>
+            <th>Precision</th>
+            <th>Vendor</th>
+            <th>Ordering</th>
+            <th>Result</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exec in executions %}
+          <tr>
+            <td>{{ exec.timestamp }}</td>
+            <td><span class="badge">{{ exec.precision }}</span></td>
+            <td>{{ exec.vendor }}</td>
+            <td>{{ exec.ordering if exec.ordering else "N/A" }}</td>
+            <td>{{ exec.result }}</td>
+            <td><span class="status-{{ exec.status }}">{{ exec.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">No execution history available. Run this benchmark to see results here.</p>
+      {% endif %}
+    </section>
+
+    <section class="detail-section">
+      <h2>🔧 Configuration Details</h2>
+      <div class="config-details">
+        {{ benchmark.config_html | safe }}
+      </div>
+    </section>
+
+    <section class="detail-section">
+      <h2>📈 Statistical Analysis</h2>
+      {% if statistics %}
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>Vendor</th>
+            <th>Mean</th>
+            <th>Median</th>
+            <th>Std Dev</th>
+            <th>Min</th>
+            <th>Max</th>
+            <th>Samples</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for stat in statistics %}
+          <tr>
+            <td><strong>{{ stat.vendor }}</strong></td>
+            <td>{{ stat.mean }}</td>
+            <td>{{ stat.median }}</td>
+            <td>{{ stat.std_dev }}</td>
+            <td>{{ stat.min }}</td>
+            <td>{{ stat.max }}</td>
+            <td>{{ stat.sample_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="muted">Statistical analysis not available.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="detail-sidebar">
+    <div class="sidebar-section">
+      <h3>Quick Info</h3>
+      <dl class="info-list">
+        <dt>Benchmark Code:</dt>
+        <dd><code>{{ benchmark.code }}</code></dd>
+
+        <dt>Category:</dt>
+        <dd>{{ benchmark.category }}</dd>
+
+        <dt>Total Executions:</dt>
+        <dd>{{ execution_count }}</dd>
+
+        <dt>Latest Run:</dt>
+        <dd>{{ latest_run if latest_run else "Never" }}</dd>
+
+        <dt>Precisions Tested:</dt>
+        <dd>{{ precisions_tested }}</dd>
+
+        <dt>Vendors Tested:</dt>
+        <dd>{{ vendors_tested }}</dd>
+      </dl>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Run This Benchmark</h3>
+      <div class="command-box">
+        <pre><code>{{ benchmark.run_command }}</code></pre>
+        <button class="btn btn-sm" onclick="copyToClipboard('{{ benchmark.run_command }}')">Copy</button>
+      </div>
+      <p class="help-text">{{ benchmark.run_help }}</p>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Related</h3>
+      <ul class="related-links">
+        {% for related in benchmark.related %}
+        <li><a href="/benchmarks/{{ related.code }}">{{ related.name }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Documentation</h3>
+      <ul class="doc-links-sidebar">
+        {% for doc in benchmark.docs %}
+        <li><a href="{{ doc.url }}">{{ doc.title }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert('Command copied to clipboard!');
+  });
+}
+
+{% if execution_data %}
+// Chart rendering code
+const ctx = document.getElementById('performance-chart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: {{ execution_data.labels | tojson }},
+    datasets: [{
+      label: '{{ execution_data.metric }}',
+      data: {{ execution_data.values | tojson }},
+      backgroundColor: 'rgba(54, 162, 235, 0.5)',
+      borderColor: 'rgba(54, 162, 235, 1)',
+      borderWidth: 1
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false
+      },
+      title: {
+        display: true,
+        text: 'Performance Comparison'
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: false,
+        title: {
+          display: true,
+          text: '{{ execution_data.y_label }}'
+        }
+      }
+    }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}
