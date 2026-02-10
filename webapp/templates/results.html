@@ -1,21 +1,18 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BLAS Benchmark Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  </head>
-  <body>
-    <main class="container">
-      <header>
-        <h1>🚀 BLAS Benchmark Dashboard</h1>
-        <p class="muted">
-          Results: <code>{{ results_dir }}</code> |
-          Database: <code>{{ db_path }}</code>
-        </p>
-      </header>
+{% extends "base.html" %}
+
+{% block title %}MUMPS Benchmark Results{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>📊 MUMPS Benchmark Results</h1>
+  <p class="lead">
+    Performance comparison across BLAS vendors, precisions, and ordering algorithms
+  </p>
+</div>
 
       <!-- Filters Section -->
       <div class="filters-panel">
@@ -200,8 +197,6 @@
           <a href="https://github.com/aecs4u/mumps" target="_blank">GitHub</a>
         </p>
       </footer>
-    </main>
-
     <script>
       // Data from server
       const sparseData = {{ sparse.rows | tojson }};
@@ -498,5 +493,4 @@
       // Initialize on page load
       window.addEventListener('DOMContentLoaded', initCharts);
     </script>
-  </body>
-</html>
+{% endblock %}
