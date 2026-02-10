@@ -2,8 +2,13 @@
 #  This file is part of MUMPS 5.8.2, released
 #  on Mon Jan 12 15:17:08 UTC 2026
 #
+SRCDIR ?= $(CURDIR)
+SRCDIR := $(abspath $(SRCDIR))
+BUILDROOT := $(abspath $(CURDIR))
+
 topdir = .
 libdir = $(topdir)/lib
+OUT_OF_TREE := $(if $(filter $(BUILDROOT),$(SRCDIR)),0,1)
 
 default: d
 
@@ -11,58 +16,53 @@ default: d
 .PHONY: all s d c z prerequisites libseqneeded
 .PHONY: allshared sshared dshared cshared zshared prerequisitesshared libseqneededsharedlibseq sharedlibseq
 .PHONY: pkgconfig install install-libs install-headers install-pkgconfig FORCE
-.PHONY: showconfig cache-key cache-restore cache-save cache-clean
+.PHONY: showconfig cache-key cache-restore cache-save cache-clean out-of-tree-prepare out
 .PHONY: bench-blas bench-blas-dense bench-correctness bench-db bench-all-db bench-mkl-amd-vitis-db bench-web
 
-all: prerequisites
+all: out-of-tree-prepare prerequisites
 	$(call run_cached_build,all,all)
 
-s: prerequisites
+s: out-of-tree-prepare prerequisites
 	$(call run_cached_build,s,s)
 
-d: prerequisites
+d: out-of-tree-prepare prerequisites
 	$(call run_cached_build,d,d)
 
-c: prerequisites
+c: out-of-tree-prepare prerequisites
 	$(call run_cached_build,c,c)
 
-z: prerequisites
+z: out-of-tree-prepare prerequisites
 	$(call run_cached_build,z,z)
 
 
-allshared: prerequisitesshared
+allshared: out-of-tree-prepare prerequisitesshared
 	$(call run_cached_build,allshared,all)
 
-sshared: prerequisitesshared
+sshared: out-of-tree-prepare prerequisitesshared
 	$(call run_cached_build,sshared,s)
 
-dshared: prerequisitesshared
+dshared: out-of-tree-prepare prerequisitesshared
 	$(call run_cached_build,dshared,d)
 
-cshared: prerequisitesshared
+cshared: out-of-tree-prepare prerequisitesshared
 	$(call run_cached_build,cshared,c)
 
-zshared: prerequisitesshared
+zshared: out-of-tree-prepare prerequisitesshared
 	$(call run_cached_build,zshared,z)
 
 
-# Is Makefile.inc available ?
-Makefile.inc:
-	@echo "######################################################################"
-	@echo "# BEFORE COMPILING MUMPS, YOU MUST HAVE AN APPROPRIATE Makefile.inc"
-	@echo "# FILE AVAILABLE. PLEASE CHECK THE DIRECTORY ./Make.inc FOR EXAMPLES"
-	@echo "# OF Makefile.inc FILES, AND USE Make.inc/Makefile.inc.generic IF YOU"
-	@echo "# NEED TO BUILD A NEW ONE. SEE ALSO THE README AND INSTALL FILES"
-	@echo "######################################################################"
-	@exit 1
-
-include Makefile.inc
+MAKEFILE_INC_PATH := $(firstword $(wildcard Makefile.inc $(SRCDIR)/Makefile.inc))
+ifeq ($(MAKEFILE_INC_PATH),)
+$(error Missing Makefile.inc. Provide one in $(CURDIR) or $(SRCDIR))
+endif
+include $(MAKEFILE_INC_PATH)
 -include Makefile.vendor
+-include $(SRCDIR)/Makefile.vendor
 
 BUILD_CACHE ?= 1
 BUILD_CACHE_DIR ?= $(topdir)/.build-cache
 HASH_TOOL := $(shell command -v sha1sum >/dev/null 2>&1 && echo sha1sum || (command -v shasum >/dev/null 2>&1 && echo shasum || echo))
-CACHE_SIGNATURE = BUILD=$(BUILD);BLAS_VENDOR=$(BLAS_VENDOR);CC=$(CC);FC=$(FC);FL=$(FL);CDEFS=$(CDEFS);OPTF=$(OPTF);OPTL=$(OPTL);OPTC=$(OPTC);ORDERINGSF=$(ORDERINGSF);ORDERINGSC=$(ORDERINGSC);LORDERINGS=$(LORDERINGS);LIBBLAS=$(LIBBLAS);LAPACK=$(LAPACK);LIBOTHERS=$(LIBOTHERS);PLAT=$(PLAT);LIBEXT=$(LIBEXT);LIBEXT_SHARED=$(LIBEXT_SHARED)
+CACHE_SIGNATURE = BUILD=$(BUILD);BLAS_VENDOR=$(BLAS_VENDOR);CC=$(CC);FC=$(FC);FL=$(FL);CDEFS=$(CDEFS);OPTF=$(OPTF);OPTF90=$(OPTF90);OPTL=$(OPTL);OPTC=$(OPTC);C_STD_MODE=$(C_STD_MODE);C_STD_FLAG=$(C_STD_FLAG);FORTRAN_FIXED_STD_MODE=$(FORTRAN_FIXED_STD_MODE);FORTRAN_FIXED_STD_FLAG=$(FORTRAN_FIXED_STD_FLAG);FORTRAN_FREE_STD_MODE=$(FORTRAN_FREE_STD_MODE);FORTRAN_FREE_STD_FLAG=$(FORTRAN_FREE_STD_FLAG);ORDERINGSF=$(ORDERINGSF);ORDERINGSC=$(ORDERINGSC);LORDERINGS=$(LORDERINGS);LIBBLAS=$(LIBBLAS);LAPACK=$(LAPACK);LIBOTHERS=$(LIBOTHERS);PLAT=$(PLAT);LIBEXT=$(LIBEXT);LIBEXT_SHARED=$(LIBEXT_SHARED)
 ifneq ($(strip $(HASH_TOOL)),)
 CACHE_KEY := $(shell printf '%s' '$(CACHE_SIGNATURE)' | $(HASH_TOOL) | awk '{print $$1}')
 else
@@ -162,6 +162,13 @@ clean:
 	  cd $(LPORDDIR); $(MAKE) CC="$(CC)" CFLAGS="$(OPTC)" AR="$(AR)" RANLIB="$(RANLIB)" OUTC="$(OUTC)" LIBEXT="$(LIBEXT)" LIBEXT_SHARED="$(LIBEXT_SHARED)" PLAT="$(PLAT)" realclean; \
         fi;
 
+clean-build:
+	@echo "Cleaning build artifacts (preserving generated sources)"
+	(cd src; $(MAKE) clean)
+	(cd examples; $(MAKE) clean)
+	(cd $(libdir); $(RM) lib*$(PLAT)$(LIBEXT) lib*$(PLAT)$(LIBEXT_SHARED))
+	(cd libseq; $(MAKE) clean)
+
 distclean: clean cache-clean
 
 pkgconfig: $(PKGCONFIG_FILES)
@@ -254,6 +261,12 @@ showconfig:
 	@echo "LIBOTHERS=$(LIBOTHERS)"
 	@echo "LIBSEQ=$(LIBSEQ)"
 	@echo "LORDERINGS=$(LORDERINGS)"
+	@echo "C_STD_MODE=$(C_STD_MODE)"
+	@echo "C_STD_FLAG=$(C_STD_FLAG)"
+	@echo "FORTRAN_FIXED_STD_MODE=$(FORTRAN_FIXED_STD_MODE)"
+	@echo "FORTRAN_FIXED_STD_FLAG=$(FORTRAN_FIXED_STD_FLAG)"
+	@echo "FORTRAN_FREE_STD_MODE=$(FORTRAN_FREE_STD_MODE)"
+	@echo "FORTRAN_FREE_STD_FLAG=$(FORTRAN_FREE_STD_FLAG)"
 	@echo "USE_CCACHE=$(USE_CCACHE)"
 	@echo "CCACHE_BIN=$(CCACHE_BIN)"
 	@echo "BUILD_CACHE=$(BUILD_CACHE)"

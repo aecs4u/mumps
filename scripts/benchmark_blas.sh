@@ -212,19 +212,19 @@ for vendor in $VENDORS; do
 
   echo "==> Vendor: $vendor"
 
-  if ! make -j"$MAKE_JOBS" BUILD=release BLAS_VENDOR="$vendor" "$precision" >/dev/null 2>"$build_log"; then
+  # Use smart incremental build system (only rebuilds if config/sources changed)
+  export BUILD=release
+  export BLAS_VENDOR="$vendor"
+  export ARITH="$precision"
+  export MAKE_JOBS="$MAKE_JOBS"
+
+  if ! "$ROOT_DIR/scripts/smart_build.sh" benchmarks "$precision" >/dev/null 2>"$build_log"; then
     echo "  skipped: build failed"
     echo "  build log: $build_log"
     rm -f "$run_log"
     continue
   fi
-  rm -f "$build_log"
-
-  if ! make -C examples BUILD=release BLAS_VENDOR="$vendor" "$BENCH_BIN" >/dev/null 2>"$run_log"; then
-    echo "  skipped: benchmark driver build failed"
-    echo "  build log: $run_log"
-    continue
-  fi
+  rm -f "$build_log" "$run_log"
 
   if (( WARMUP_RUNS > 0 )); then
     warmup_failed=0
