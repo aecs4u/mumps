@@ -139,6 +139,24 @@ Useful cache commands:
  % make cache-save
  % make cache-clean
 
+Language standards (C23 / Fortran 2023 where applicable):
+---------------------------------------------------------
+
+The default build now:
+- compiles C sources with C23 mode when supported by the compiler
+  (automatic fallback to older supported C mode),
+- compiles fixed-form Fortran (`.F`) in legacy mode for compatibility,
+- compiles free-form Fortran (`.F90`) in Fortran 2023 mode when supported
+  (automatic fallback to Fortran 2018/2008).
+
+Useful knobs:
+ C_STD_MODE=auto|gnu23|gnu2x|c23|gnu17|none
+ FORTRAN_FIXED_STD_MODE=legacy|none
+ FORTRAN_FREE_STD_MODE=auto|f2023|f2018|f2008|none
+
+Inspect resolved flags with:
+ % make showconfig
+
 Benchmarking BLAS vendors:
 --------------------------
 

@@ -1,0 +1,11 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include/mumps
+
+Name: MUMPS-@PREC@
+Description: MUltifrontal Massively Parallel sparse direct Solver (@PREC@ precision)
+Version: @PROJECT_VERSION@
+Requires:
+Libs: -L${libdir} -l@PREC@mumps -lmumps_common -lmpiseq
+Cflags: -I${includedir}

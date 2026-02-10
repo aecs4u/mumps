@@ -46,6 +46,7 @@ $(EXAMPLES_CONFIG_STAMP): FORCE
 	  printf 'CDEFS=%s\n' "$(CDEFS)"; \
 	  printf 'OPTC=%s\n' "$(OPTC)"; \
 	  printf 'OPTF=%s\n' "$(OPTF)"; \
+	  printf 'OPTF90=%s\n' "$(OPTF90)"; \
 	  printf 'OPTL=%s\n' "$(OPTL)"; \
 	  printf 'INCS=%s\n' "$(INCS)"; \
 	  printf 'LIBBLAS=%s\n' "$(LIBBLAS)"; \
@@ -135,16 +136,16 @@ zgemm_bench: $$@.o
 
 # Compilation rules for Fortran benchmarks
 sgemm_bench.o: sgemm_bench.F90
-	$(FC) $(OPTF) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c sgemm_bench.F90 $(OUTF)$@
+	$(FC) $(OPTF90) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c sgemm_bench.F90 $(OUTF)$@
 
 dgemm_bench.o: dgemm_bench.F90
-	$(FC) $(OPTF) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c dgemm_bench.F90 $(OUTF)$@
+	$(FC) $(OPTF90) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c dgemm_bench.F90 $(OUTF)$@
 
 cgemm_bench.o: cgemm_bench.F90
-	$(FC) $(OPTF) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c cgemm_bench.F90 $(OUTF)$@
+	$(FC) $(OPTF90) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c cgemm_bench.F90 $(OUTF)$@
 
 zgemm_bench.o: zgemm_bench.F90
-	$(FC) $(OPTF) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c zgemm_bench.F90 $(OUTF)$@
+	$(FC) $(OPTF90) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c zgemm_bench.F90 $(OUTF)$@
 
 .SUFFIXES: .c .F .o
 .F.o:

@@ -1,0 +1,16 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/MUMPSTargets.cmake")
+
+check_required_components(MUMPS)
+
+# Provide legacy variables for compatibility
+set(MUMPS_LIBRARIES MUMPS::mumps_common)
+set(MUMPS_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include/mumps")
+
+# Add precision-specific targets
+foreach(_prec @PRECISIONS@)
+    if(TARGET MUMPS::${_prec}mumps)
+        list(APPEND MUMPS_LIBRARIES MUMPS::${_prec}mumps)
+    endif()
+endforeach()

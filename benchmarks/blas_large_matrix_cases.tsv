@@ -1,0 +1,8 @@
+# case_id	m	n	k	iters_default	source	description
+portable_large_4096	4096	4096	4096	3	local_practical_fallback	Fallback large case for lower-memory systems when sourced giant cases are skipped.
+portable_large_6144	6144	6144	6144	2	local_practical_fallback	Fallback large case for lower-memory systems when sourced giant cases are skipped.
+intel_gemm_example_10000	10000	10000	10000	2	https://www.intel.com/content/www/us/en/developer/articles/technical/benchmarking-gemm-with-intel-mkl-and-blis-on-intel-processors.html	Intel GEMM benchmark article example (all dimensions set to 10000).
+intel_linpack_testrun_10000	10000	10000	10000	2	https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-0/run-the-intel-distribution-for-linpack-benchmark.html	Intel oneMKL LINPACK guide test run uses N=10000.
+intel_linpack_16gb_40000	40000	40000	40000	1	https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-0/run-the-intel-distribution-for-linpack-benchmark.html	Intel oneMKL LINPACK guide cites N=40000 for 16 GB HPL problem sizing.
+intel_linpack_32gb_56000	56000	56000	56000	1	https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-0/run-the-intel-distribution-for-linpack-benchmark.html	Intel oneMKL LINPACK guide cites N=56000 for 32 GB HPL problem sizing.
+intel_linpack_64gb_83000	83000	83000	83000	1	https://www.intel.com/content/www/us/en/docs/onemkl/developer-guide-linux/2024-0/run-the-intel-distribution-for-linpack-benchmark.html	Intel oneMKL LINPACK guide cites N=83000 for 64 GB HPL problem sizing.

@@ -267,18 +267,18 @@ $(incdir)/mumps_int_def.h: mumps_int_def32_h.in  mumps_int_def64_h.in
 	if echo " $(OPTC) " | grep DINTSIZE64; then cat mumps_int_def64_h.in > $(incdir)/mumps_int_def.h; else cat mumps_int_def32_h.in > $(incdir)/mumps_int_def.h; fi
 
 $(libdir)/libmumps_common$(PLAT)$(LIBEXT):      $(OBJS_COMMON_MOD) $(OBJS_COMMON_OTHER) $(OBJS_C_COMMON)
-	$(AR)$@ $?
+	$(AR)$@ $(OBJS_COMMON_MOD) $(OBJS_COMMON_OTHER) $(OBJS_C_COMMON)
 	$(RANLIB) $@
 
 $(libdir)/libmumps_common$(PLAT)$(LIBEXT_SHARED):      $(OBJS_COMMON_MOD) $(OBJS_COMMON_OTHER) $(OBJS_C_COMMON)
-	$(FC) $(OPTL) $(SHARED_OPT) $^ -Wl,$(SONAME),libmumps_common$(PLAT)$(LIBEXT_SHARED) -L$(libdir) $(RPATH_OPT) $(LORDERINGS) $(LIBS) $(LIBOTHERS) -o $@ 
+	$(FC) $(OPTL) $(SHARED_OPT) $(OBJS_COMMON_MOD) $(OBJS_COMMON_OTHER) $(OBJS_C_COMMON) -Wl,$(SONAME),libmumps_common$(PLAT)$(LIBEXT_SHARED) -L$(libdir) $(RPATH_OPT) $(LORDERINGS) $(LIBS) $(LIBOTHERS) -o $@ 
 
 $(libdir)/lib$(ARITH)mumps$(PLAT)$(LIBEXT):    $(OBJS_MOD_ARITHDEP) $(OBJS_OTHER)
-	$(AR)$@ $?
+	$(AR)$@ $(OBJS_MOD_ARITHDEP) $(OBJS_OTHER)
 	$(RANLIB) $@
 
 $(libdir)/lib$(ARITH)mumps$(PLAT)$(LIBEXT_SHARED):    $(OBJS_MOD_ARITHDEP) $(OBJS_OTHER) $(libdir)/libmumps_common$(PLAT)$(LIBEXT_SHARED)
-	$(FC) $(OPTL) $(SHARED_OPT) $(OBJS_MOD_ARITHDEP) $(OBJS_OTHER) -L$(libdir) $(LORDERINGS) $(LIBS) $(LIBOTHERS) -lmumps_common$(PLAT) -o $@ $(RPATH_OPT)
+	$(FC) $(OPTL) $(SHARED_OPT) $(OBJS_MOD_ARITHDEP) $(OBJS_OTHER) -L$(libdir) $(LORDERINGS) $(LIBS) $(LIBBLAS) $(LAPACK) $(LIBOTHERS) -lmumps_common$(PLAT) -o $@ $(RPATH_OPT)
 
 $(OBJS_COMMON_MOD) $(OBJS_COMMON_OTHER) $(OBJS_C_COMMON) $(OBJS_MOD_ARITHDEP) $(OBJS_OTHER): $(SRC_CONFIG_STAMP)
 $(libdir)/libmumps_common$(PLAT)$(LIBEXT): $(SRC_CONFIG_STAMP)
@@ -505,11 +505,15 @@ mumps_static_mapping.o:          lr_common.o
 $(OBJS_COMMON_OTHER):$(OBJS_COMMON_MOD)
 $(OBJS_OTHER):$(OBJS_COMMON_MOD) $(OBJS_MOD_ARITHDEP)
 
-.SUFFIXES: .c .F .o
-.F.o:
-	$(FC) $(OPTF) $(FPIC) -I. -I../include $(INCS) $(IORDERINGSF) $(ORDERINGSF) -c $*.F $(OUTF)$*.o
-.c.o:
-	$(CC) $(OPTC) $(FPIC) -I../include $(INCS) $(CDEFS) $(IORDERINGSC) $(ORDERINGSC) $(DEPFLAGS_C) -c $*.c $(OUTC)$*.o
+.SUFFIXES: .c .F .F90 .f90 .o
+%.o: %.F
+	$(FC) $(OPTF) $(FPIC) -I. -I../include $(INCS) $(IORDERINGSF) $(ORDERINGSF) -c $< $(OUTF)$@
+%.o: %.F90
+	$(FC) $(OPTF90) $(FPIC) -I. -I../include $(INCS) $(IORDERINGSF) $(ORDERINGSF) -c $< $(OUTF)$@
+%.o: %.f90
+	$(FC) $(OPTF90) $(FPIC) -I. -I../include $(INCS) $(IORDERINGSF) $(ORDERINGSF) -c $< $(OUTF)$@
+%.o: %.c
+	$(CC) $(OPTC) $(FPIC) -I../include $(INCS) $(CDEFS) $(IORDERINGSC) $(ORDERINGSC) $(DEPFLAGS_C) -c $< $(OUTC)$@
 
 $(ARITH)mumps_c.o:	mumps_c.c
 	$(CC) $(OPTC) $(FPIC) -I../include $(INCS) $(CDEFS) -DMUMPS_ARITH=MUMPS_ARITH_$(ARITH) \

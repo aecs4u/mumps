@@ -52,3 +52,14 @@ MATLAB   contains a MATLAB interface to the sequential version of MUMPS
 SCILAB   contains a SCILAB interface to the sequential version of MUMPS
          (only tested with scilab version 4)
 
+docs     contains project-specific documentation for the enhanced build
+         system, template infrastructure, and benchmarking tools. See
+         docs/README.md for a complete index.
+
+scripts  contains helper scripts for template generation, benchmarking,
+         and build system automation.
+
+benchmarks contains benchmark fixtures, test matrices, and result storage.
+
+webapp   contains a FastAPI web interface for viewing benchmark results.
+

@@ -201,17 +201,73 @@ EXTRA_OPTF ?=
 EXTRA_OPTL ?=
 EXTRA_OPTC ?=
 
+# Language standards migration knobs.
+# C:
+#   C_STD_MODE=auto (default) -> prefer gnu23, fallback to gnu2x/c23/gnu17
+#   C_STD_MODE=gnu23|gnu2x|c23|gnu17|none
+C_STD_MODE ?= auto
+C_STD_FLAG_AUTO := $(shell out=/tmp/mumps_cstd_$$.o; \
+  if printf '%s\n' 'int main(void){return 0;}' | $(BASE_CC) -x c -std=gnu23 -c -o $$out - >/dev/null 2>&1; then \
+    echo -std=gnu23; \
+  elif printf '%s\n' 'int main(void){return 0;}' | $(BASE_CC) -x c -std=gnu2x -c -o $$out - >/dev/null 2>&1; then \
+    echo -std=gnu2x; \
+  elif printf '%s\n' 'int main(void){return 0;}' | $(BASE_CC) -x c -std=c23 -c -o $$out - >/dev/null 2>&1; then \
+    echo -std=c23; \
+  else \
+    echo -std=gnu17; \
+  fi; rm -f $$out)
+ifeq ($(C_STD_MODE),auto)
+  C_STD_FLAG := $(C_STD_FLAG_AUTO)
+else ifeq ($(C_STD_MODE),none)
+  C_STD_FLAG :=
+else
+  C_STD_FLAG := -std=$(C_STD_MODE)
+endif
+
+# Fortran:
+#   fixed-form legacy core keeps legacy mode for compatibility.
+#   free-form (.F90) uses modern standard where available.
+FORTRAN_FIXED_STD_MODE ?= legacy
+ifeq ($(FORTRAN_FIXED_STD_MODE),none)
+  FORTRAN_FIXED_STD_FLAG :=
+else
+  FORTRAN_FIXED_STD_FLAG := -std=$(FORTRAN_FIXED_STD_MODE)
+endif
+
+#   FORTRAN_FREE_STD_MODE=auto (default) -> prefer f2023, fallback f2018/f2008
+#   FORTRAN_FREE_STD_MODE=f2023|f2018|f2008|none
+FORTRAN_FREE_STD_MODE ?= auto
+FORTRAN_FREE_STD_FLAG_AUTO := $(shell src=/tmp/mumps_fstd_$$.f90; out=/tmp/mumps_fstd_$$.o; \
+  printf '%s\n' 'program p' 'implicit none' 'end program p' > $$src; \
+  if $(BASE_FC) -std=f2023 -c $$src -o $$out >/dev/null 2>&1; then \
+    echo -std=f2023; \
+  elif $(BASE_FC) -std=f2018 -c $$src -o $$out >/dev/null 2>&1; then \
+    echo -std=f2018; \
+  else \
+    echo -std=f2008; \
+  fi; rm -f $$src $$out)
+ifeq ($(FORTRAN_FREE_STD_MODE),auto)
+  FORTRAN_FREE_STD_FLAG := $(FORTRAN_FREE_STD_FLAG_AUTO)
+else ifeq ($(FORTRAN_FREE_STD_MODE),none)
+  FORTRAN_FREE_STD_FLAG :=
+else
+  FORTRAN_FREE_STD_FLAG := -std=$(FORTRAN_FREE_STD_MODE)
+endif
+
 ifeq ($(BUILD),release)
-OPTF    = -O3 $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS) $(EXTRA_OPTF)
+OPTF_BASE = -O3 $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS)
 OPTL    = -O3 $(COMMON_OMP_FLAGS) $(EXTRA_OPTL)
-OPTC    = -O3 $(COMMON_OMP_FLAGS) $(EXTRA_OPTC)
+OPTC    = -O3 $(COMMON_OMP_FLAGS) $(C_STD_FLAG) $(EXTRA_OPTC)
 else ifeq ($(BUILD),debug)
-OPTF    = -O0 -g $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS) -fcheck=all -fbacktrace $(EXTRA_OPTF)
+OPTF_BASE = -O0 -g $(COMMON_OMP_FLAGS) $(FORTRAN_COMPAT_FLAGS) -fcheck=all -fbacktrace
 OPTL    = -O0 -g $(COMMON_OMP_FLAGS) $(EXTRA_OPTL)
-OPTC    = -O0 -g $(COMMON_OMP_FLAGS) -fno-omit-frame-pointer $(EXTRA_OPTC)
+OPTC    = -O0 -g $(COMMON_OMP_FLAGS) -fno-omit-frame-pointer $(C_STD_FLAG) $(EXTRA_OPTC)
 else
 $(error Unsupported BUILD='$(BUILD)'; use BUILD=release or BUILD=debug)
 endif
+
+OPTF  = $(OPTF_BASE) $(FORTRAN_FIXED_STD_FLAG) $(EXTRA_OPTF)
+OPTF90 = $(OPTF_BASE) $(FORTRAN_FREE_STD_FLAG) $(EXTRA_OPTF)
  
 INCS = $(INCSEQ)
 LIBS = $(LIBSEQ)

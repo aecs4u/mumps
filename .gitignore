@@ -137,3 +137,22 @@ gmon.out
 # Template-generated source files
 /src/generated/
 **/generated/
+
+# Precision-specific build directories (template outputs during development)
+/c/
+/d/
+/s/
+/z/
+
+# Build cache and stamp files
+/.build-cache/
+**/.build_config.stamp
+**/template_stamps/
+
+# Incremental build artifacts
+build-test/
+
+# Generated documentation (historical)
+/CODE_DEDUPLICATION_ANALYSIS.md
+/PILOT_TEMPLATE_DEMO.md
+/TEMPLATE_ROLLOUT_*.md

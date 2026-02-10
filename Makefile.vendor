@@ -1,0 +1,211 @@
+#
+# Smart vendor-specific build targets for MUMPS
+# This file provides efficient vendor-specific builds with proper organization
+#
+# Usage:
+#   make vendor-build VENDOR=blis PRECISIONS="s d c z"  # Build all precisions
+#   make vendor-combined VENDOR=blis                     # Create combined libraries
+#   make vendor-install VENDOR=blis                      # Install to lib/vendors/blis/
+#
+
+.PHONY: vendor-build vendor-combined vendor-install vendor-clean vendor-test
+
+# Configuration
+VENDOR ?= openblas
+PRECISIONS ?= s d c z
+VENDOR_LIB_DIR := lib/vendors/$(VENDOR)
+BUILD_PARALLEL ?= 1
+
+# Build all precisions for a vendor (static + shared)
+vendor-build: vendor-build-static vendor-build-shared
+
+# Build static libraries for vendor
+vendor-build-static:
+	@echo "==> Building static libraries for vendor: $(VENDOR)"
+	@echo "    Precisions: $(PRECISIONS)"
+	@echo "  --> Cleaning for fresh static build..."
+	@cd src && $(MAKE) clean >/dev/null 2>&1 && cd ..
+	@rm -f lib/lib*mumps*.a lib/libmumps_common.a 2>/dev/null || true
+	@for prec in $(PRECISIONS); do \
+		echo "  --> Building $${prec}mumps.a with $(VENDOR)..."; \
+		if $(MAKE) BLAS_VENDOR=$(VENDOR) $${prec} 2>&1 | tee /tmp/build-static-$${prec}.log | grep -q "Leaving directory"; then \
+			if [ -f lib/lib$${prec}mumps.a ]; then \
+				echo "      ✓ lib$${prec}mumps.a built successfully"; \
+			else \
+				echo "      ✗ lib$${prec}mumps.a build completed but file missing"; \
+				tail -30 /tmp/build-static-$${prec}.log; \
+				exit 1; \
+			fi; \
+		else \
+			echo "      ✗ $${prec}mumps.a build failed"; \
+			tail -30 /tmp/build-static-$${prec}.log; \
+			exit 1; \
+		fi; \
+	done
+	@echo "  --> Building common library..."
+	@$(MAKE) BLAS_VENDOR=$(VENDOR) prerequisites >/dev/null 2>&1
+	@echo "==> Static build complete"
+
+# Build shared libraries for vendor (with proper cleanup)
+vendor-build-shared:
+	@echo "==> Building shared libraries for vendor: $(VENDOR)"
+	@echo "    Precisions: $(PRECISIONS)"
+	@echo "  --> Full clean of src/ directory for shared build..."
+	@cd src && $(MAKE) clean >/dev/null 2>&1 && cd ..
+	@echo "  --> Building common shared library..."
+	@if $(MAKE) BLAS_VENDOR=$(VENDOR) prerequisitesshared >/dev/null 2>&1; then \
+		echo "      ✓ libmumps_common.so built successfully"; \
+	else \
+		echo "      ✗ libmumps_common.so build failed"; \
+		exit 1; \
+	fi
+	@for prec in $(PRECISIONS); do \
+		echo "  --> Building $${prec}mumps.so with $(VENDOR)..."; \
+		if $(MAKE) BLAS_VENDOR=$(VENDOR) $${prec}shared 2>&1 | tee /tmp/build-$${prec}.log | grep -q "Leaving directory"; then \
+			if [ -f lib/lib$${prec}mumps.so ]; then \
+				echo "      ✓ lib$${prec}mumps.so built successfully"; \
+			else \
+				echo "      ✗ lib$${prec}mumps.so build completed but file missing"; \
+				tail -50 /tmp/build-$${prec}.log; \
+				exit 1; \
+			fi; \
+		else \
+			echo "      ✗ lib$${prec}mumps.so build failed"; \
+			tail -50 /tmp/build-$${prec}.log; \
+			exit 1; \
+		fi; \
+	done
+	@echo "==> Shared build complete"
+
+# Create combined static library (all precisions in one .a file)
+vendor-combined-static: vendor-build-static
+	@echo "==> Creating combined static library: libmumps_$(VENDOR)_sdcz.a"
+	@rm -rf .tmp-combine-$(VENDOR)
+	@mkdir -p .tmp-combine-$(VENDOR)
+	@for prec in s d c z; do \
+		if [ -f lib/lib$${prec}mumps.a ]; then \
+			echo "  --> Extracting lib$${prec}mumps.a..."; \
+			cd .tmp-combine-$(VENDOR) && ar x ../lib/lib$${prec}mumps.a && cd ..; \
+		fi; \
+	done
+	@echo "  --> Extracting libmumps_common.a..."
+	@cd .tmp-combine-$(VENDOR) && ar x ../lib/libmumps_common.a && cd ..
+	@echo "  --> Extracting libpord.a..."
+	@cd .tmp-combine-$(VENDOR) && ar x ../PORD/lib/libpord.a && cd ..
+	@echo "  --> Extracting libmpiseq.a..."
+	@cd .tmp-combine-$(VENDOR) && ar x ../lib/libmpiseq.a && cd ..
+	@echo "  --> Creating combined archive..."
+	@cd .tmp-combine-$(VENDOR) && ar rcs ../lib/libmumps_$(VENDOR)_sdcz.a *.o && cd ..
+	@ranlib lib/libmumps_$(VENDOR)_sdcz.a
+	@rm -rf .tmp-combine-$(VENDOR)
+	@ls -lh lib/libmumps_$(VENDOR)_sdcz.a
+	@echo "  ✓ Combined static library created"
+
+# Create combined shared library (all precisions in one .so file)
+vendor-combined-shared: vendor-build-shared
+	@echo "==> Creating combined shared library: libmumps_$(VENDOR)_sdcz.so"
+	@echo "  --> Linking all shared libraries..."
+	@$(FC) $(OPTL) -shared -Wl,-soname,libmumps_$(VENDOR)_sdcz.so \
+		-Wl,--whole-archive \
+		lib/libsmumps.so lib/libdmumps.so lib/libcmumps.so lib/libzmumps.so \
+		lib/libmumps_common.so \
+		-Wl,--no-whole-archive \
+		$(LORDERINGS) $(LIBS) $(LIBBLAS) $(LAPACK) $(LIBOTHERS) \
+		-o lib/libmumps_$(VENDOR)_sdcz.so 2>&1 | grep -v "warning: " || true
+	@if [ -f lib/libmumps_$(VENDOR)_sdcz.so ]; then \
+		ls -lh lib/libmumps_$(VENDOR)_sdcz.so; \
+		echo "  ✓ Combined shared library created"; \
+	else \
+		echo "  ✗ Combined shared library creation failed"; \
+		echo "  → Note: This requires all individual shared libraries to exist"; \
+		exit 1; \
+	fi
+
+# Create both combined libraries
+vendor-combined: vendor-combined-static vendor-combined-shared
+
+# Install libraries to vendor-specific directory
+vendor-install: vendor-combined
+	@echo "==> Installing libraries to $(VENDOR_LIB_DIR)"
+	@mkdir -p $(VENDOR_LIB_DIR)
+	@echo "  --> Copying static libraries..."
+	@for prec in s d c z; do \
+		if [ -f lib/lib$${prec}mumps.a ]; then \
+			cp lib/lib$${prec}mumps.a $(VENDOR_LIB_DIR)/; \
+			echo "      ✓ lib$${prec}mumps.a"; \
+		fi; \
+	done
+	@cp lib/libmumps_common.a $(VENDOR_LIB_DIR)/
+	@echo "      ✓ libmumps_common.a"
+	@echo "  --> Copying shared libraries..."
+	@for prec in s d c z; do \
+		if [ -f lib/lib$${prec}mumps.so ]; then \
+			cp lib/lib$${prec}mumps.so $(VENDOR_LIB_DIR)/; \
+			echo "      ✓ lib$${prec}mumps.so"; \
+		fi; \
+	done
+	@if [ -f lib/libmumps_common.so ]; then \
+		cp lib/libmumps_common.so $(VENDOR_LIB_DIR)/; \
+		echo "      ✓ libmumps_common.so"; \
+	fi
+	@echo "  --> Copying combined libraries..."
+	@cp lib/libmumps_$(VENDOR)_sdcz.a $(VENDOR_LIB_DIR)/
+	@echo "      ✓ libmumps_$(VENDOR)_sdcz.a"
+	@if [ -f lib/libmumps_$(VENDOR)_sdcz.so ]; then \
+		cp lib/libmumps_$(VENDOR)_sdcz.so $(VENDOR_LIB_DIR)/; \
+		echo "      ✓ libmumps_$(VENDOR)_sdcz.so"; \
+	fi
+	@echo "  --> Copying auxiliary libraries..."
+	@cp lib/libmpiseq.a $(VENDOR_LIB_DIR)/ 2>/dev/null || true
+	@cp PORD/lib/libpord.a $(VENDOR_LIB_DIR)/ 2>/dev/null || true
+	@echo "==> Installation complete: $(VENDOR_LIB_DIR)"
+	@ls -lh $(VENDOR_LIB_DIR)/
+
+# Clean vendor-specific build
+vendor-clean:
+	@echo "==> Cleaning vendor build: $(VENDOR)"
+	@rm -rf $(VENDOR_LIB_DIR)
+	@rm -f lib/libmumps_$(VENDOR)_sdcz.a lib/libmumps_$(VENDOR)_sdcz.so
+	@echo "  ✓ Cleaned"
+
+# Quick test of vendor build
+vendor-test: vendor-install
+	@echo "==> Testing vendor build: $(VENDOR)"
+	@echo "  --> Testing double precision simple test..."
+	@if $(MAKE) -C examples BLAS_VENDOR=$(VENDOR) dsimpletest >/dev/null 2>&1; then \
+		if ./examples/dsimpletest < examples/input_simpletest_real >/dev/null 2>&1; then \
+			echo "      ✓ dsimpletest passed"; \
+		else \
+			echo "      ✗ dsimpletest failed to run"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "      ✗ dsimpletest failed to build"; \
+		exit 1; \
+	fi
+	@echo "  --> Checking library links..."
+	@ldd examples/dsimpletest | grep -E "(blis|blas|lapack)" || echo "      → Using system BLAS"
+	@echo "==> Test complete"
+
+# Build all major vendors in parallel (requires separate shells)
+vendor-build-all:
+	@echo "==> Building all vendors: openblas mkl blis reference"
+	@$(MAKE) vendor-install VENDOR=openblas
+	@$(MAKE) vendor-install VENDOR=mkl
+	@$(MAKE) vendor-install VENDOR=blis
+	@$(MAKE) vendor-install VENDOR=reference
+	@echo "==> All vendors built"
+
+# Show vendor library status
+vendor-status:
+	@echo "==> Vendor library status"
+	@for vendor in openblas mkl blis reference; do \
+		if [ -d "lib/vendors/$$vendor" ]; then \
+			echo "  ✓ $$vendor: $$(ls lib/vendors/$$vendor/*.a lib/vendors/$$vendor/*.so 2>/dev/null | wc -l) files"; \
+			ls -lh lib/vendors/$$vendor/ | grep -E "lib.*mumps.*\.(a|so)" | awk '{print "      " $$9 " (" $$5 ")"}'; \
+		else \
+			echo "  ✗ $$vendor: not built"; \
+		fi; \
+	done
+
+.PHONY: vendor-build-all vendor-status
