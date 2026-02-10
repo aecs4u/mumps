@@ -8,6 +8,62 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 export LD_LIBRARY_PATH="$ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+# Helper function to add BLAS vendor library paths to LD_LIBRARY_PATH
+add_vendor_lib_path() {
+    local vendor="$1"
+    local lib_path=""
+
+    case "$vendor" in
+        mkl)
+            # Try to get MKL library path from pkg-config
+            if command -v pkg-config >/dev/null 2>&1; then
+                for pc in mkl-dynamic-lp64-seq mkl-dynamic-ilp64-seq mkl-sdl; do
+                    if pkg-config --exists "$pc" 2>/dev/null; then
+                        lib_path="$(pkg-config --variable=libdir "$pc" 2>/dev/null)"
+                        break
+                    fi
+                done
+            fi
+            # Fallback: Try common MKL installation paths
+            if [[ -z "$lib_path" ]]; then
+                for mkl_root in "$MKLROOT" /opt/intel/oneapi/mkl/latest /opt/intel/mkl /usr/lib/x86_64-linux-gnu; do
+                    if [[ -d "$mkl_root/lib" ]] && [[ -f "$mkl_root/lib/libmkl_rt.so" || -f "$mkl_root/lib/intel64/libmkl_rt.so" ]]; then
+                        if [[ -d "$mkl_root/lib/intel64" ]]; then
+                            lib_path="$mkl_root/lib/intel64"
+                        else
+                            lib_path="$mkl_root/lib"
+                        fi
+                        break
+                    fi
+                done
+            fi
+            ;;
+        blis|amd-vitis)
+            # Try to get BLIS library path from pkg-config
+            if command -v pkg-config >/dev/null 2>&1; then
+                for pc in blis-mt amdblis aocl-blis blis; do
+                    if pkg-config --exists "$pc" 2>/dev/null; then
+                        lib_path="$(pkg-config --variable=libdir "$pc" 2>/dev/null)"
+                        break
+                    fi
+                done
+            fi
+            ;;
+        openblas)
+            # Try to get OpenBLAS library path from pkg-config
+            if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists openblas 2>/dev/null; then
+                lib_path="$(pkg-config --variable=libdir openblas 2>/dev/null)"
+            fi
+            ;;
+    esac
+
+    # Add to LD_LIBRARY_PATH if found
+    if [[ -n "$lib_path" ]] && [[ -d "$lib_path" ]]; then
+        export LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        echo "  Added library path: $lib_path" >&2
+    fi
+}
+
 PRECISIONS="${BENCH_PRECISIONS:-d}"
 VENDORS="${BENCH_VENDORS:-openblas mkl blis pkgconfig reference}"
 ORDERINGS="${BENCH_ORDERINGS:-7}"
@@ -211,6 +267,9 @@ for vendor in $VENDORS; do
   times=()
 
   echo "==> Vendor: $vendor"
+
+  # Add vendor-specific library paths to LD_LIBRARY_PATH
+  add_vendor_lib_path "$vendor"
 
   # Use smart incremental build system (only rebuilds if config/sources changed)
   export BUILD=release
