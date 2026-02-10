@@ -622,6 +622,154 @@ async def benchmark_detail(request: Request, benchmark_code: str) -> HTMLRespons
     return templates.TemplateResponse("benchmark_detail.html", context)
 
 
+def _collect_migration_status() -> dict[str, Any]:
+    """Collect migration status from git and filesystem."""
+    import subprocess
+
+    # Fortran templates status
+    templates_dir = PROJECT_ROOT / "src" / "templates"
+    fortran_templates = list(templates_dir.glob("*.F.in")) if templates_dir.exists() else []
+    modern_templates = list(templates_dir.glob("*.f90.in")) if templates_dir.exists() else []
+
+    # C files status
+    c_files = []
+    for pattern in ["src/*.c", "PORD/lib/*.c", "libseq/*.c"]:
+        c_files.extend(PROJECT_ROOT.glob(pattern))
+
+    # Count modernized files by checking git log
+    fortran_modernized = []
+    c_modernized = []
+
+    try:
+        # Get list of modified template files from git log
+        result = subprocess.run(
+            ["git", "log", "--name-only", "--pretty=format:", "--all"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0:
+            modified_files = set(result.stdout.strip().split('\n'))
+            fortran_modernized = [f for f in fortran_templates if f"src/templates/{f.name}" in modified_files]
+            c_modernized = [f for f in c_files if str(f.relative_to(PROJECT_ROOT)) in modified_files]
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError):
+        pass
+
+    total_fortran = len(fortran_templates) + len(modern_templates)
+    total_c = len(c_files)
+
+    fortran_done = len(modern_templates) + len(fortran_modernized)
+    c_done = len(c_modernized)
+
+    # File-level details
+    files = []
+
+    # Add Fortran templates
+    for tmpl in fortran_templates:
+        is_modern = tmpl in fortran_modernized or any(m.stem == tmpl.stem for m in modern_templates)
+        lines = len(tmpl.read_text(encoding='utf-8').splitlines()) if tmpl.exists() else 0
+        files.append({
+            "name": tmpl.name,
+            "type": "Fortran Template",
+            "category": "template",
+            "status": "Completed" if is_modern else "Pending",
+            "lines": lines,
+            "path": str(tmpl.relative_to(PROJECT_ROOT)),
+            "branch": "fortran-modernization" if is_modern else "-",
+        })
+
+    for tmpl in modern_templates:
+        lines = len(tmpl.read_text(encoding='utf-8').splitlines()) if tmpl.exists() else 0
+        files.append({
+            "name": tmpl.name,
+            "type": "Fortran Template",
+            "category": "template",
+            "status": "Already Modern",
+            "lines": lines,
+            "path": str(tmpl.relative_to(PROJECT_ROOT)),
+            "branch": "-",
+        })
+
+    # Add C files
+    for c_file in c_files[:100]:  # Limit to first 100 for performance
+        is_modern = c_file in c_modernized
+        lines = len(c_file.read_text(encoding='utf-8').splitlines()) if c_file.exists() else 0
+        files.append({
+            "name": c_file.name,
+            "type": "C Source",
+            "category": "c_source",
+            "status": "Completed" if is_modern else "Pending",
+            "lines": lines,
+            "path": str(c_file.relative_to(PROJECT_ROOT)),
+            "branch": "c23-migration" if is_modern else "-",
+        })
+
+    # Calculate statistics
+    fortran_pct = round((fortran_done / total_fortran * 100), 1) if total_fortran > 0 else 0
+    c_pct = round((c_done / total_c * 100), 1) if total_c > 0 else 0
+    overall_pct = round(((fortran_done + c_done) / (total_fortran + total_c) * 100), 1) if (total_fortran + total_c) > 0 else 0
+
+    return {
+        "kpis": {
+            "overall_progress": overall_pct,
+            "fortran_progress": fortran_pct,
+            "c_progress": c_pct,
+            "total_files": total_fortran + total_c,
+            "completed_files": fortran_done + c_done,
+            "pending_files": (total_fortran + total_c) - (fortran_done + c_done),
+            "fortran_total": total_fortran,
+            "fortran_done": fortran_done,
+            "c_total": total_c,
+            "c_done": c_done,
+        },
+        "files": sorted(files, key=lambda x: (x["status"] == "Pending", x["type"], x["name"])),
+        "categories": ["template", "c_source"],
+        "statuses": ["Completed", "Pending", "Already Modern"],
+    }
+
+
+@app.get("/migration", response_class=HTMLResponse)
+async def migration_status(
+    request: Request,
+    file_type: str | None = None,
+    status: str | None = None,
+    category: str | None = None
+) -> HTMLResponse:
+    """Migration status dashboard with KPIs and filters."""
+    data = _collect_migration_status()
+
+    # Apply filters
+    files = data["files"]
+    if file_type:
+        files = [f for f in files if f["type"] == file_type]
+    if status:
+        files = [f for f in files if f["status"] == status]
+    if category:
+        files = [f for f in files if f["category"] == category]
+
+    context = {
+        "request": request,
+        "kpis": data["kpis"],
+        "files": files,
+        "all_files_count": len(data["files"]),
+        "filtered_files_count": len(files),
+        "file_types": sorted(set(f["type"] for f in data["files"])),
+        "categories": data["categories"],
+        "statuses": data["statuses"],
+        "current_file_type": file_type,
+        "current_status": status,
+        "current_category": category,
+    }
+    return templates.TemplateResponse("migration.html", context)
+
+
+@app.get("/api/migration", response_class=JSONResponse)
+async def api_migration_status() -> JSONResponse:
+    """API endpoint for migration status data."""
+    return JSONResponse(_collect_migration_status())
+
+
 @app.get("/health", response_class=JSONResponse)
 async def health() -> JSONResponse:
     """Health check endpoint for monitoring webapp status."""

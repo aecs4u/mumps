@@ -1,0 +1,486 @@
+{% extends "base.html" %}
+
+{% block title %}MUMPS Migration Status - C23 & Fortran 2023{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>🚀 MUMPS Modernization Status</h1>
+  <p class="lead">
+    Tracking the migration to C23 and Fortran 2023 standards
+    across {{ kpis.total_files }} source files
+  </p>
+</div>
+
+<!-- KPI Dashboard -->
+<div class="kpi-section">
+  <h2>📊 Overall Progress</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card primary">
+      <div class="kpi-value">{{ "%.1f"|format(kpis.overall_progress) }}%</div>
+      <div class="kpi-label">Overall Completion</div>
+      <div class="kpi-progress">
+        <div class="progress-bar" style="width: {{ kpis.overall_progress }}%;"></div>
+      </div>
+      <div class="kpi-detail">{{ kpis.completed_files }} / {{ kpis.total_files }} files</div>
+    </div>
+
+    <div class="kpi-card success">
+      <div class="kpi-value">{{ kpis.completed_files }}</div>
+      <div class="kpi-label">Files Completed</div>
+      <div class="kpi-icon">✓</div>
+    </div>
+
+    <div class="kpi-card warning">
+      <div class="kpi-value">{{ kpis.pending_files }}</div>
+      <div class="kpi-label">Files Pending</div>
+      <div class="kpi-icon">⏳</div>
+    </div>
+
+    <div class="kpi-card info">
+      <div class="kpi-value">{{ kpis.total_files }}</div>
+      <div class="kpi-label">Total Files</div>
+      <div class="kpi-icon">📁</div>
+    </div>
+  </div>
+
+  <!-- Fortran & C23 Progress -->
+  <div class="progress-section">
+    <div class="progress-card">
+      <h3>🔷 Fortran 2023 Migration</h3>
+      <div class="progress-bar-container">
+        <div class="progress-bar fortran" style="width: {{ kpis.fortran_progress }}%;"></div>
+        <span class="progress-label">{{ "%.1f"|format(kpis.fortran_progress) }}%</span>
+      </div>
+      <div class="progress-stats">
+        <span class="stat-badge success">{{ kpis.fortran_done }} completed</span>
+        <span class="stat-badge warning">{{ kpis.fortran_total - kpis.fortran_done }} pending</span>
+        <span class="stat-badge info">{{ kpis.fortran_total }} total templates</span>
+      </div>
+    </div>
+
+    <div class="progress-card">
+      <h3>🔶 C23 Migration</h3>
+      <div class="progress-bar-container">
+        <div class="progress-bar c23" style="width: {{ kpis.c_progress }}%;"></div>
+        <span class="progress-label">{{ "%.1f"|format(kpis.c_progress) }}%</span>
+      </div>
+      <div class="progress-stats">
+        <span class="stat-badge success">{{ kpis.c_done }} completed</span>
+        <span class="stat-badge warning">{{ kpis.c_total - kpis.c_done }} pending</span>
+        <span class="stat-badge info">{{ kpis.c_total }} total files</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filters-section">
+  <h2>🔍 Filters</h2>
+  <form method="get" action="/migration" class="filters-form">
+    <div class="filter-group">
+      <label for="file_type">File Type:</label>
+      <select name="file_type" id="file_type" onchange="this.form.submit()">
+        <option value="">All Types</option>
+        {% for ftype in file_types %}
+          <option value="{{ ftype }}" {% if current_file_type == ftype %}selected{% endif %}>
+            {{ ftype }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label for="status">Status:</label>
+      <select name="status" id="status" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        {% for status in statuses %}
+          <option value="{{ status }}" {% if current_status == status %}selected{% endif %}>
+            {{ status }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label for="category">Category:</label>
+      <select name="category" id="category" onchange="this.form.submit()">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+          <option value="{{ cat }}" {% if current_category == cat %}selected{% endif %}>
+            {{ cat.replace('_', ' ').title() }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Apply Filters</button>
+    <a href="/migration" class="btn btn-secondary">Clear Filters</a>
+  </form>
+
+  <div class="filter-info">
+    Showing <strong>{{ filtered_files_count }}</strong> of <strong>{{ all_files_count }}</strong> files
+  </div>
+</div>
+
+<!-- Files Table -->
+<div class="table-section">
+  <h2>📄 File Details</h2>
+  <div class="table-responsive">
+    <table class="migration-table">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>File Name</th>
+          <th>Type</th>
+          <th>Lines</th>
+          <th>Path</th>
+          <th>Branch</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for file in files %}
+        <tr class="status-{{ file.status.lower().replace(' ', '-') }}">
+          <td>
+            <span class="status-badge {{ file.status.lower().replace(' ', '-') }}">
+              {% if file.status == "Completed" %}✓{% elif file.status == "Pending" %}⏳{% else %}✨{% endif %}
+              {{ file.status }}
+            </span>
+          </td>
+          <td><code>{{ file.name }}</code></td>
+          <td><span class="type-badge">{{ file.type }}</span></td>
+          <td class="text-right">{{ "{:,}".format(file.lines) }}</td>
+          <td><small class="text-muted">{{ file.path }}</small></td>
+          <td>
+            {% if file.branch != "-" %}
+              <span class="branch-badge">{{ file.branch }}</span>
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- API Link -->
+<div class="info-section">
+  <h2>🔗 API Access</h2>
+  <p>
+    Access migration status programmatically via JSON API:
+    <code><a href="/api/migration">/api/migration</a></code>
+  </p>
+</div>
+
+<style>
+/* KPI Dashboard */
+.kpi-section {
+  margin: 2rem 0;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.kpi-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  text-align: center;
+  transition: transform 0.2s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.kpi-card.primary { border-top: 4px solid #007bff; }
+.kpi-card.success { border-top: 4px solid #28a745; }
+.kpi-card.warning { border-top: 4px solid #ffc107; }
+.kpi-card.info { border-top: 4px solid #17a2b8; }
+
+.kpi-value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.kpi-label {
+  font-size: 0.9rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-icon {
+  font-size: 2rem;
+  margin-top: 0.5rem;
+}
+
+.kpi-progress {
+  margin: 1rem 0 0.5rem;
+  background: #e9ecef;
+  border-radius: 10px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.kpi-progress .progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #007bff, #0056b3);
+  transition: width 0.3s;
+}
+
+.kpi-detail {
+  font-size: 0.85rem;
+  color: #999;
+  margin-top: 0.5rem;
+}
+
+/* Progress Section */
+.progress-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.progress-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.progress-card h3 {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}
+
+.progress-bar-container {
+  position: relative;
+  background: #e9ecef;
+  border-radius: 10px;
+  height: 30px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.progress-bar-container .progress-bar {
+  height: 100%;
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+}
+
+.progress-bar.fortran {
+  background: linear-gradient(90deg, #4a90e2, #357abd);
+}
+
+.progress-bar.c23 {
+  background: linear-gradient(90deg, #f5a623, #d68910);
+}
+
+.progress-label {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: white;
+  font-weight: bold;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.progress-stats {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.stat-badge.success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.stat-badge.warning {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.stat-badge.info {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+/* Filters */
+.filters-section {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.filters-form {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #555;
+}
+
+.filter-group select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  min-width: 150px;
+}
+
+.filter-info {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+/* Table */
+.table-section {
+  margin: 2rem 0;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.migration-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.migration-table thead {
+  background: #f8f9fa;
+}
+
+.migration-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #dee2e6;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.migration-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #dee2e6;
+  font-size: 0.9rem;
+}
+
+.migration-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.migration-table tbody tr.status-completed {
+  background: #f0f9f4;
+}
+
+.migration-table tbody tr.status-pending {
+  background: #fffbf0;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-badge.completed {
+  background: #28a745;
+  color: white;
+}
+
+.status-badge.pending {
+  background: #ffc107;
+  color: #333;
+}
+
+.status-badge.already-modern {
+  background: #17a2b8;
+  color: white;
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: #e9ecef;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.branch-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: #007bff;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-muted {
+  color: #6c757d;
+}
+
+code {
+  background: #f8f9fa;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+</style>
+{% endblock %}
