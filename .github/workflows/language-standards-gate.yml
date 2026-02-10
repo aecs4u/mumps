@@ -1,0 +1,22 @@
+name: Language Standards Gate
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    name: C23 / F2023 Completion Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make gcc gfortran pkg-config ripgrep
+
+      - name: Run fail-fast standards gate
+        run: make lang-std-gate

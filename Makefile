@@ -16,7 +16,7 @@ default: d
 .PHONY: all s d c z prerequisites libseqneeded
 .PHONY: allshared sshared dshared cshared zshared prerequisitesshared libseqneededsharedlibseq sharedlibseq
 .PHONY: pkgconfig install install-libs install-headers install-pkgconfig FORCE
-.PHONY: showconfig cache-key cache-restore cache-save cache-clean out-of-tree-prepare out
+.PHONY: showconfig lang-std-gate cache-key cache-restore cache-save cache-clean out-of-tree-prepare out
 .PHONY: bench-blas bench-blas-dense bench-correctness bench-db bench-all-db bench-mkl-amd-vitis-db bench-web
 .PHONY: webapp webapp-stop webapp-open webapp-health
 
@@ -272,6 +272,9 @@ showconfig:
 	@echo "BUILD_CACHE=$(BUILD_CACHE)"
 	@echo "BUILD_CACHE_DIR=$(BUILD_CACHE_DIR)"
 	@echo "CACHE_KEY=$(CACHE_KEY)"
+
+lang-std-gate:
+	@bash scripts/check_language_standards_completion.sh --gate
 
 cache-key:
 	@echo "$(CACHE_KEY)"
