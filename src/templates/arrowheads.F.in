@@ -309,7 +309,22 @@ C
       INTEGER NCAND
       LOGICAL T4_MASTER_CONCERNED, EARLYT3ROOTINS
       @MUMPS_TYPE@ ZERO
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
       PARAMETER( ZERO = (0.0@MUMPS_REAL_LIT@,0.0@MUMPS_REAL_LIT@) )
+      @ENDIF@
+      @ENDIF@
+      @ENDIF@
       INTEGER, ALLOCATABLE, DIMENSION(:,:) :: IW4
       INTEGER(8), ALLOCATABLE, DIMENSION(:) :: PTRAW
       INTEGER :: IARR1, IORG, J
@@ -702,7 +717,7 @@ C
      &                   MPI_INTEGER,
      &                   DEST_SHR, ARROWHEAD, COMM, IERR )
           CALL MPI_SEND( BUFR(1,DEST_SHR), TAILLE_SENDR,
-     &                   MPI_COMPLEX, DEST_SHR,
+     &                   @MUMPS_MPI_TYPE@, DEST_SHR,
      &                   ARROWHEAD, COMM, IERR )
           BUFI(1,DEST_SHR) = 0
          ENDIF
@@ -734,7 +749,7 @@ C
      &                   MPI_INTEGER,
      &                   DEST_SHR, ARROWHEAD, COMM, IERR )
           CALL MPI_SEND( BUFR(1,DEST_SHR), TAILLE_SENDR,
-     &                   MPI_COMPLEX, DEST_SHR,
+     &                   @MUMPS_MPI_TYPE@, DEST_SHR,
      &                   ARROWHEAD, COMM, IERR )
           BUFI(1,DEST_SHR) = 0
          ENDIF
@@ -766,7 +781,7 @@ C
      &                   ISLAVE, ARROWHEAD, COMM, IERR )
           IF ( TAILLE_SENDR .NE. 0 ) THEN
             CALL MPI_SEND( BUFR(1,ISLAVE), TAILLE_SENDR,
-     &                     MPI_COMPLEX, ISLAVE,
+     &                     @MUMPS_MPI_TYPE@, ISLAVE,
      &                     ARROWHEAD, COMM, IERR )
           END IF
         ENDDO
@@ -782,7 +797,7 @@ C
       INTEGER LO, HI
       INTEGER I,J
       INTEGER ISWAP, PIVOT
-      @MUMPS_TYPE@ cswap
+      @MUMPS_TYPE@ @MUMPS_PREFIX_LOWER@swap
       I = LO
       J = HI
       PIVOT = PERM(INTLIST((I+J)/2))
@@ -798,9 +813,9 @@ C
         ISWAP = INTLIST(I)
         INTLIST(I) = INTLIST(J)
         INTLIST(J)=ISWAP
-        cswap = DBLLIST(I)
+        @MUMPS_PREFIX_LOWER@swap = DBLLIST(I)
         DBLLIST(I) = DBLLIST(J)
-        DBLLIST(J) = cswap
+        DBLLIST(J) = @MUMPS_PREFIX_LOWER@swap
       ENDIF
       IF ( I <= J) THEN
         I = I+1
@@ -862,7 +877,22 @@ C
       EXTERNAL MUMPS_TYPENODE, MUMPS_PROCNODE
       @MUMPS_TYPE@ VAL
       @MUMPS_TYPE@ ZERO
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
+      @IF_REAL@
+      PARAMETER( ZERO = 0.0@MUMPS_REAL_LIT@ )
+      @ENDIF@
+      @IF_COMPLEX@
       PARAMETER( ZERO = (0.0@MUMPS_REAL_LIT@,0.0@MUMPS_REAL_LIT@) )
+      @ENDIF@
+      @ENDIF@
+      @ENDIF@
       INCLUDE 'mpif.h'
       INCLUDE 'mumps_tags.h'
       INTEGER MASTER
@@ -952,7 +982,7 @@ C
           NB_REC = -NB_REC 
         ENDIF
         IF (NB_REC.EQ.0) EXIT
-        CALL MPI_RECV( BUFR(1), NBRECORDS, MPI_COMPLEX,
+        CALL MPI_RECV( BUFR(1), NBRECORDS, @MUMPS_MPI_TYPE@,
      &                  MASTER, ARROWHEAD,
      &                COMM, STATUS, IERR )
         DO IREC=1, NB_REC
@@ -1039,7 +1069,17 @@ C
       INTEGER, INTENT(IN) :: LLD, M, N
       @MUMPS_TYPE@             :: A(int(LLD,8)*int(N-1,8)+int(M,8))
       INTEGER             :: KEEP(500)
+      @IF_REAL@
+      @MUMPS_TYPE@, PARAMETER :: ZERO = 0.0@MUMPS_REAL_LIT@
+      @ENDIF@
+      @IF_COMPLEX@
+      @IF_REAL@
+      @MUMPS_TYPE@, PARAMETER :: ZERO = 0.0@MUMPS_REAL_LIT@
+      @ENDIF@
+      @IF_COMPLEX@
       @MUMPS_TYPE@, PARAMETER :: ZERO = (0.0@MUMPS_REAL_LIT@,0.0@MUMPS_REAL_LIT@)
+      @ENDIF@
+      @ENDIF@
       INTEGER I, J
 !$    INTEGER :: NOMP
       INTEGER(8) :: I8, LA

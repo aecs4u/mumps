@@ -20,6 +20,8 @@
 #                            real(id%RHS(K8)), aimag(id%RHS(K8)),
 #                            dble(id%RHS(K8)), aimag(id%RHS(K8))
 #                            (RHS array write format: real→single value, complex→real,imag)
+#   @MUMPS_MPI_TYPE@      → MPI_REAL, MPI_DOUBLE_PRECISION, MPI_COMPLEX, MPI_DOUBLE_COMPLEX
+#                            (MPI data type for precision)
 #
 # Conditional blocks:
 #   @IF_COMPLEX@...@ENDIF@  → Include only for c/z precisions
@@ -96,6 +98,13 @@ declare -A RHS_WRITES=(
     [z]="dble(id%RHS(K8)), aimag(id%RHS(K8))"
 )
 
+declare -A MPI_TYPES=(
+    [s]="MPI_REAL"
+    [d]="MPI_DOUBLE_PRECISION"
+    [c]="MPI_COMPLEX"
+    [z]="MPI_DOUBLE_COMPLEX"
+)
+
 # Generate for each precision
 for prec in s d c z; do
     PREFIX="${PREFIXES[$prec]}"
@@ -106,6 +115,7 @@ for prec in s d c z; do
     REAL_LIT="${REAL_LITS[$prec]}"
     ARITH="${ARITHS[$prec]}"
     RHS_WRITE="${RHS_WRITES[$prec]}"
+    MPI_TYPE="${MPI_TYPES[$prec]}"
     OUTPUT_FILE="$OUTPUT_DIR/${prec}${BASENAME}"
 
     # Process conditional blocks based on precision
@@ -137,6 +147,7 @@ for prec in s d c z; do
         -e "s/@MUMPS_REAL_LIT@/${REAL_LIT}/g" \
         -e "s/@MUMPS_ARITH@/${ARITH}/g" \
         -e "s/@MUMPS_RHS_WRITE@/${RHS_WRITE_ESCAPED}/g" \
+        -e "s/@MUMPS_MPI_TYPE@/${MPI_TYPE}/g" \
         -e "s/@MUMPS_TYPE@/${TYPE}/g" \
         > "$OUTPUT_FILE"
 
