@@ -18,6 +18,7 @@ default: d
 .PHONY: pkgconfig install install-libs install-headers install-pkgconfig FORCE
 .PHONY: showconfig cache-key cache-restore cache-save cache-clean out-of-tree-prepare out
 .PHONY: bench-blas bench-blas-dense bench-correctness bench-db bench-all-db bench-mkl-amd-vitis-db bench-web
+.PHONY: webapp webapp-stop webapp-open webapp-health
 
 all: out-of-tree-prepare prerequisites
 	$(call run_cached_build,all,all)
@@ -336,3 +337,22 @@ bench-mkl-amd-vitis-db:
 
 bench-web:
 	uvicorn webapp.main:app --reload
+
+# Webapp targets
+webapp:
+	@echo "Starting MUMPS Benchmark Results webapp on http://localhost:9001"
+	@python3 -m webapp.main --port 9001
+
+webapp-stop:
+	@echo "Stopping webapp..."
+	@pkill -f "python3 -m webapp.main" || pkill -f "uvicorn webapp.main:app" || echo "No webapp process found"
+
+webapp-open:
+	@echo "Opening webapp in browser..."
+	@command -v xdg-open >/dev/null 2>&1 && xdg-open http://localhost:9001 || \
+	 command -v open >/dev/null 2>&1 && open http://localhost:9001 || \
+	 echo "Please open http://localhost:9001 in your browser"
+
+webapp-health:
+	@echo "Checking webapp health..."
+	@curl -s http://localhost:9001/health | python3 -m json.tool || echo "Webapp not responding"

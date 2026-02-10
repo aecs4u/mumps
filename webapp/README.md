@@ -13,10 +13,29 @@ FastAPI-based web interface for viewing MUMPS and BLAS benchmark results.
 
 ## Quick Start
 
-### Using the startup script (recommended)
+### Using Makefile (simplest)
 
 ```bash
-# Start with default port (9002)
+# Start webapp (port 9001)
+make webapp
+
+# View in browser
+make webapp-open
+# Or manually: xdg-open http://localhost:9001
+
+# Check status
+make webapp-health
+# Or manually: curl http://localhost:9001/health
+
+# Stop webapp
+make webapp-stop
+# Or manually: pkill -f "uvicorn main:app"
+```
+
+### Using the startup script
+
+```bash
+# Start with default port (9001)
 ./scripts/start_webapp.sh
 
 # Custom port
@@ -26,7 +45,7 @@ FastAPI-based web interface for viewing MUMPS and BLAS benchmark results.
 ./scripts/start_webapp.sh --reload
 
 # Custom host and port
-./scripts/start_webapp.sh --host 0.0.0.0 --port 9002
+./scripts/start_webapp.sh --host 0.0.0.0 --port 9001
 ```
 
 ### Using Python directly
@@ -42,29 +61,29 @@ python3 -m webapp.main --port 8080 --reload
 ### Using uvicorn directly
 
 ```bash
-# Default (uses port 9002 from code)
+# Default (uses port 9001 from code)
 uvicorn webapp.main:app
 
 # Custom port
-uvicorn webapp.main:app --port 9002
+uvicorn webapp.main:app --port 9001
 
 # Development mode with auto-reload
-uvicorn webapp.main:app --port 9002 --reload
+uvicorn webapp.main:app --port 9001 --reload
 
 # Expose to network
-uvicorn webapp.main:app --host 0.0.0.0 --port 9002
+uvicorn webapp.main:app --host 0.0.0.0 --port 9001
 ```
 
 ## Configuration
 
 ### Port Configuration
 
-**Default port**: 9002
+**Default port**: 9001
 
 Configure via (in order of precedence):
-1. **Command-line argument**: `--port 9002`
-2. **Environment variable**: `WEBAPP_PORT=9002`
-3. **Default**: 9002
+1. **Command-line argument**: `--port 9001`
+2. **Environment variable**: `WEBAPP_PORT=9001`
+3. **Default**: 9001
 
 ### Host Configuration
 
@@ -90,12 +109,16 @@ Configure via:
   - Query parameters:
     - `precision` - Arithmetic precision: s, d, c, or z (default: d)
     - `ordering` - Ordering method: AMD, AMF, SCOTCH, PORD, METIS, QAMD, Auto (default: Auto)
-  - Example: `http://localhost:9002/?precision=d&ordering=METIS`
+  - Example: `http://localhost:9001/?precision=d&ordering=METIS`
 
 ### JSON API
 
 - **`GET /api/results`** - All benchmark results as JSON
   - Returns: `{sparse: {...}, dense: {...}, results_dir: "...", db_path: "..."}`
+
+- **`GET /health`** - Health check endpoint
+  - Returns: `{status: "healthy", database: {...}, results_dir: {...}}`
+  - Use for monitoring and verifying webapp is running
 
 ## Data Sources
 

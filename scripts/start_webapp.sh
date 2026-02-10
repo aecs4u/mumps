@@ -6,7 +6,7 @@
 #   ./scripts/start_webapp.sh [--port PORT] [--host HOST] [--reload]
 #
 # Environment variables:
-#   WEBAPP_PORT  - Port to run on (default: 9002)
+#   WEBAPP_PORT  - Port to run on (default: 9001)
 #   WEBAPP_HOST  - Host to bind to (default: 127.0.0.1)
 #   BLAS_BENCH_RESULTS_DIR - Results directory (default: benchmarks/results)
 #   MUMPS_BENCH_DB - Database path (default: benchmarks/mumps_benchmarks.sqlite)

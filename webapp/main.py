@@ -328,6 +328,27 @@ async def api_results() -> JSONResponse:
     )
 
 
+@app.get("/health", response_class=JSONResponse)
+async def health() -> JSONResponse:
+    """Health check endpoint for monitoring webapp status."""
+    db_exists = DB_PATH.exists()
+    results_dir_exists = RESULTS_DIR.exists()
+
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "database": {
+                "path": str(DB_PATH),
+                "exists": db_exists,
+            },
+            "results_dir": {
+                "path": str(RESULTS_DIR),
+                "exists": results_dir_exists,
+            },
+        }
+    )
+
+
 if __name__ == "__main__":
     import argparse
     import uvicorn
@@ -336,8 +357,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("WEBAPP_PORT", "9002")),
-        help="Port to run the web server on (default: 9002, or WEBAPP_PORT env var)",
+        default=int(os.getenv("WEBAPP_PORT", "9001")),
+        help="Port to run the web server on (default: 9001, or WEBAPP_PORT env var)",
     )
     parser.add_argument(
         "--host",
