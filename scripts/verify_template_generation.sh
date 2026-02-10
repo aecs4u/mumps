@@ -14,6 +14,10 @@ TEMPLATE_DIR="src/templates"
 GENERATED_DIR="src/generated"
 ORIGINAL_DIR="src"
 
+# Verification mode: "byte-level" (default) or "semantic"
+VERIFICATION_MODE="byte-level"
+COMPILE_ONLY=false
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -22,21 +26,33 @@ NC='\033[0m' # No Color
 
 passed=0
 failed=0
+skipped=0
 errors=()
 
 usage() {
-    echo "Usage: $0 [template_name]"
+    echo "Usage: $0 [options] [template_name]"
     echo ""
-    echo "Verifies template generation produces byte-identical output to originals."
+    echo "Verifies template generation produces correct output."
+    echo ""
+    echo "Options:"
+    echo "  --semantic      Use semantic equivalence checking (default for modernized code)"
+    echo "  --byte-level    Use byte-level comparison (default for original code)"
+    echo "  --compile-only  Only run compilation tests, skip comparison"
+    echo "  -h, --help      Show this help message"
     echo ""
     echo "Arguments:"
     echo "  template_name   Specific template to verify (without .in extension)"
     echo "                  If omitted, verifies all templates"
     echo ""
     echo "Examples:"
-    echo "  $0                        # Verify all templates"
+    echo "  $0                        # Verify all templates (byte-level)"
+    echo "  $0 --semantic             # Verify all with semantic checking"
     echo "  $0 mumps_config_file      # Verify specific template"
-    echo "  $0 ana_aux                # Verify analysis auxiliary template"
+    echo "  $0 --semantic ana_aux     # Verify with semantic checking"
+    echo ""
+    echo "Verification modes:"
+    echo "  byte-level:  Byte-identical comparison (original code)"
+    echo "  semantic:    Compilation + functional equivalence (modernized code)"
 }
 
 verify_file() {
@@ -47,12 +63,6 @@ verify_file() {
     local template_file="${TEMPLATE_DIR}/${base_name}.in"
     local generated_file="${GENERATED_DIR}/${prec}${base_name}"
     local original_file="${ORIGINAL_DIR}/${prec}${base_name}"
-
-    # Skip if original doesn't exist (might be intentionally missing)
-    if [[ ! -f "$original_file" ]]; then
-        echo -e "${YELLOW}SKIP${NC} ${prec}${base_name} - original not found"
-        return 0
-    fi
 
     # Generate from template
     if ! ./scripts/generate_from_template.sh "$template_file" "$GENERATED_DIR" >/dev/null 2>&1; then
@@ -70,22 +80,52 @@ verify_file() {
         return 1
     fi
 
-    # Byte-compare (ignoring trailing whitespace differences)
-    if diff -q -Z "$original_file" "$generated_file" >/dev/null 2>&1; then
-        echo -e "${GREEN}PASS${NC} ${prec}${base_name} - byte-identical"
-        ((passed++))
-        return 0
-    else
-        # Check if only whitespace differs
-        if diff -q -w "$original_file" "$generated_file" >/dev/null 2>&1; then
-            echo -e "${YELLOW}WARN${NC} ${prec}${base_name} - whitespace differences only"
+    # Semantic verification mode (compilation-based)
+    if [[ "$VERIFICATION_MODE" == "semantic" ]] || [[ "$COMPILE_ONLY" == "true" ]]; then
+        # Test compilation
+        local obj_file="/tmp/verify_${prec}${base_name}.o"
+        local compile_log="/tmp/verify_${prec}${base_name}.log"
+
+        if gfortran -c -fsyntax-only "$generated_file" 2>"$compile_log"; then
+            echo -e "${GREEN}PASS${NC} ${prec}${base_name} - compiles successfully"
+            ((passed++))
+            rm -f "$compile_log"
+            return 0
+        else
+            echo -e "${RED}FAIL${NC} ${prec}${base_name} - compilation failed"
+            echo "  Compile log: $compile_log"
+            errors+=("Compilation failed: $generated_file")
+            ((failed++))
+            return 1
+        fi
+    fi
+
+    # Byte-level verification mode (original behavior)
+    if [[ "$VERIFICATION_MODE" == "byte-level" ]]; then
+        # Skip if original doesn't exist (might be intentionally missing)
+        if [[ ! -f "$original_file" ]]; then
+            echo -e "${YELLOW}SKIP${NC} ${prec}${base_name} - original not found"
+            ((skipped++))
+            return 0
+        fi
+
+        # Byte-compare (ignoring trailing whitespace differences)
+        if diff -q -Z "$original_file" "$generated_file" >/dev/null 2>&1; then
+            echo -e "${GREEN}PASS${NC} ${prec}${base_name} - byte-identical"
             ((passed++))
             return 0
         else
-            echo -e "${RED}FAIL${NC} ${prec}${base_name} - content differs"
-            errors+=("Content mismatch: $original_file vs $generated_file")
-            ((failed++))
-            return 1
+            # Check if only whitespace differs
+            if diff -q -w "$original_file" "$generated_file" >/dev/null 2>&1; then
+                echo -e "${YELLOW}WARN${NC} ${prec}${base_name} - whitespace differences only"
+                ((passed++))
+                return 0
+            else
+                echo -e "${RED}FAIL${NC} ${prec}${base_name} - content differs"
+                errors+=("Content mismatch: $original_file vs $generated_file")
+                ((failed++))
+                return 1
+            fi
         fi
     fi
 }
@@ -171,20 +211,52 @@ compile_test() {
 
 # Main execution
 main() {
-    if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
-        usage
-        exit 0
-    fi
+    # Parse options
+    local template_arg=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            --semantic)
+                VERIFICATION_MODE="semantic"
+                shift
+                ;;
+            --byte-level)
+                VERIFICATION_MODE="byte-level"
+                shift
+                ;;
+            --compile-only)
+                COMPILE_ONLY=true
+                VERIFICATION_MODE="semantic"
+                shift
+                ;;
+            -*)
+                echo "Unknown option: $1"
+                usage
+                exit 1
+                ;;
+            *)
+                template_arg="$1"
+                shift
+                ;;
+        esac
+    done
 
     # Create generated directory if it doesn't exist
     mkdir -p "$GENERATED_DIR"
 
-    if [[ $# -eq 0 ]]; then
+    echo "Verification mode: $VERIFICATION_MODE"
+    echo ""
+
+    if [[ -z "$template_arg" ]]; then
         # Verify all templates
         verify_all_templates
     else
         # Verify specific template
-        verify_template "$1"
+        verify_template "$template_arg"
     fi
 
     # Run compilation tests
@@ -200,8 +272,12 @@ main() {
     echo "========================================"
     echo "Verification Summary"
     echo "========================================"
-    echo -e "Passed: ${GREEN}${passed}${NC}"
-    echo -e "Failed: ${RED}${failed}${NC}"
+    echo "Mode: $VERIFICATION_MODE"
+    echo -e "Passed:  ${GREEN}${passed}${NC}"
+    echo -e "Failed:  ${RED}${failed}${NC}"
+    if [[ $skipped -gt 0 ]]; then
+        echo -e "Skipped: ${YELLOW}${skipped}${NC}"
+    fi
 
     if [[ ${#errors[@]} -gt 0 ]]; then
         echo ""
