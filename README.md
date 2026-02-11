@@ -212,8 +212,27 @@ mumps webapp start --port 9002 --reload
 # Visit http://localhost:9002
 ```
 
-Pages: Dashboard, Benchmarks (with test matrix catalog), Test Results,
-System Info, CLI Reference, Documentation.
+### Screenshots
+
+**Dashboard** -- Overview with navigation to all sections, benchmark results summary, and sparse matrix modules reference.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+**Benchmarks** -- Available benchmark suite with execution history, configuration details, and test matrix catalog.
+
+![Benchmarks](docs/screenshots/benchmarks.png)
+
+**Migration Status** -- Live KPIs tracking Fortran 2023 and C23 modernization progress across all source files.
+
+![Migration Status](docs/screenshots/migration.png)
+
+**CLI Dashboard** -- Interactive command execution with Graphviz use-case flowchart and job output panel.
+
+![CLI Dashboard](docs/screenshots/cli.png)
+
+**Pytest Results** -- Python test suite results with per-vendor breakdown, session history, and failure analysis.
+
+![Pytest Results](docs/screenshots/pytest.png)
 
 ---
 
