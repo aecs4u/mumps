@@ -205,7 +205,7 @@ EXTRA_OPTC ?=
 # C:
 #   C_STD_MODE=auto (default) -> prefer gnu23, fallback to gnu2x/c23/gnu17
 #   C_STD_MODE=gnu23|gnu2x|c23|gnu17|none
-C_STD_MODE ?= auto
+C_STD_MODE ?= gnu23
 C_STD_FLAG_AUTO := $(shell out=/tmp/mumps_cstd_$$.o; \
   if printf '%s\n' 'int main(void){return 0;}' | $(BASE_CC) -x c -std=gnu23 -c -o $$out - >/dev/null 2>&1; then \
     echo -std=gnu23; \
@@ -236,7 +236,7 @@ endif
 
 #   FORTRAN_FREE_STD_MODE=auto (default) -> prefer f2023, fallback f2018/f2008
 #   FORTRAN_FREE_STD_MODE=f2023|f2018|f2008|none
-FORTRAN_FREE_STD_MODE ?= auto
+FORTRAN_FREE_STD_MODE ?= f2023
 FORTRAN_FREE_STD_FLAG_AUTO := $(shell src=/tmp/mumps_fstd_$$.f90; out=/tmp/mumps_fstd_$$.o; \
   printf '%s\n' 'program p' 'implicit none' 'end program p' > $$src; \
   if $(BASE_FC) -std=f2023 -c $$src -o $$out >/dev/null 2>&1; then \
