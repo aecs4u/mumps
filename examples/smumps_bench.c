@@ -26,10 +26,12 @@
 
 static void usage(const char *prog) {
   fprintf(stderr,
-          "Usage: %s [--ngrid N] [--nrhs R] [--ordering O]\n"
-          "  --ngrid N    Grid size per dimension (default: 220)\n"
-          "  --nrhs R     Number of right-hand sides (default: 4)\n"
-          "  --ordering O Ordering method (0=AMD, 2=AMF, 3=SCOTCH, 4=PORD, 5=METIS, 6=QAMD, 7=Auto, default: 7)\n",
+          "Usage: %s [--ngrid N] [--nrhs R] [--ordering O] [--matrix-file F] [--sym S]\n"
+          "  --ngrid N      Grid size per dimension (default: 220, ignored with --matrix-file)\n"
+          "  --nrhs R       Number of right-hand sides (default: 4)\n"
+          "  --ordering O   Ordering method (0=AMD, 2=AMF, 3=SCOTCH, 4=PORD, 5=METIS, 6=QAMD, 7=Auto, default: 7)\n"
+          "  --matrix-file F  Load matrix from COO file instead of generating Laplacian\n"
+          "  --sym S        Symmetry flag (0=unsymmetric, 1=SPD, 2=general symmetric, default: 0)\n",
           prog);
 }
 
@@ -39,6 +41,81 @@ static int parse_positive_int(const char *s, int *out) {
   v = strtoll(s, &endptr, 10);
   if (endptr == s || *endptr != '\0' || v <= 0 || v > INT_MAX) return 0;
   *out = (int)v;
+  return 1;
+}
+
+static int load_coo_file(const char *path, MUMPS_INT *out_n, MUMPS_INT8 *out_nnz,
+                        MUMPS_INT **out_irn, MUMPS_INT **out_jcn, float **out_a) {
+  FILE *fp;
+  char line[1024];
+  int n_int, nnz_int;
+  MUMPS_INT n;
+  MUMPS_INT8 nnz;
+  MUMPS_INT *irn = NULL, *jcn = NULL;
+  float *a = NULL;
+  int64_t count = 0;
+  int ri, ci;
+  double val;
+
+  fp = fopen(path, "r");
+  if (!fp) {
+    fprintf(stderr, "Cannot open matrix file: %s\n", path);
+    return 0;
+  }
+
+  while (fgets(line, sizeof(line), fp)) {
+    if (line[0] == '#' || line[0] == '%' || line[0] == '\n') continue;
+    if (sscanf(line, "%d %d", &n_int, &nnz_int) == 2) break;
+    fprintf(stderr, "Invalid COO header in %s\n", path);
+    fclose(fp);
+    return 0;
+  }
+
+  n = (MUMPS_INT)n_int;
+  nnz = (MUMPS_INT8)nnz_int;
+  if (n <= 0 || nnz <= 0) {
+    fprintf(stderr, "Invalid dimensions in %s: n=%d nnz=%d\n", path, n_int, nnz_int);
+    fclose(fp);
+    return 0;
+  }
+
+  irn = (MUMPS_INT *)malloc((size_t)nnz * sizeof(MUMPS_INT));
+  jcn = (MUMPS_INT *)malloc((size_t)nnz * sizeof(MUMPS_INT));
+  a = (float *)malloc((size_t)nnz * sizeof(float));
+  if (!irn || !jcn || !a) {
+    fprintf(stderr, "Allocation failed for matrix from %s\n", path);
+    free(irn); free(jcn); free(a);
+    fclose(fp);
+    return 0;
+  }
+
+  while (fgets(line, sizeof(line), fp) && count < (int64_t)nnz) {
+    if (line[0] == '#' || line[0] == '%' || line[0] == '\n') continue;
+    if (sscanf(line, "%d %d %lf", &ri, &ci, &val) != 3) {
+      fprintf(stderr, "Invalid COO entry at line %lld in %s\n", (long long)(count + 1), path);
+      free(irn); free(jcn); free(a);
+      fclose(fp);
+      return 0;
+    }
+    irn[count] = (MUMPS_INT)ri;
+    jcn[count] = (MUMPS_INT)ci;
+    a[count] = (float)val;
+    count++;
+  }
+  fclose(fp);
+
+  if (count != (int64_t)nnz) {
+    fprintf(stderr, "Expected %lld entries but read %lld in %s\n",
+            (long long)nnz, (long long)count, path);
+    free(irn); free(jcn); free(a);
+    return 0;
+  }
+
+  *out_n = n;
+  *out_nnz = nnz;
+  *out_irn = irn;
+  *out_jcn = jcn;
+  *out_a = a;
   return 1;
 }
 
@@ -118,6 +195,8 @@ int main(int argc, char **argv) {
   int ngrid = 220;
   int nrhs = 4;
   int ordering = 7;
+  int sym = 0;
+  const char *matrix_file = NULL;
   int i, j;
   int error = 0;
   int infog1 = 0, infog2 = 0;
@@ -155,6 +234,23 @@ int main(int argc, char **argv) {
         return 2;
       }
       ++i;
+    } else if (strcmp(argv[i], "--matrix-file") == 0 || strcmp(argv[i], "-f") == 0) {
+      if (i + 1 >= argc) {
+        usage(argv[0]);
+        return 2;
+      }
+      matrix_file = argv[++i];
+    } else if (strcmp(argv[i], "--sym") == 0) {
+      if (i + 1 >= argc) {
+        usage(argv[0]);
+        return 2;
+      }
+      sym = atoi(argv[++i]);
+      if (sym < 0 || sym > 2) {
+        fprintf(stderr, "Symmetry must be 0 (unsymmetric), 1 (SPD), or 2 (general symmetric)\n");
+        usage(argv[0]);
+        return 2;
+      }
     } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
       usage(argv[0]);
       return 0;
@@ -172,63 +268,89 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  n64 = (int64_t)ngrid * (int64_t)ngrid;
-  nnz_max64 = 5LL * n64;
-  rhs_size64 = n64 * (int64_t)nrhs;
-  if (((MUMPS_INT)n64) != n64 || ((MUMPS_INT8)nnz_max64) != nnz_max64) {
+  if (matrix_file) {
+    if (!load_coo_file(matrix_file, &n, &nnz_final, &irn, &jcn, &a)) {
+      if (myid == 0) fprintf(stderr, "Failed to load matrix from %s\n", matrix_file);
+      MPI_Finalize();
+      return 1;
+    }
+    rhs_size64 = (int64_t)n * (int64_t)nrhs;
+    if (rhs_size64 <= 0 || (uint64_t)rhs_size64 > (SIZE_MAX / sizeof(float))) {
+      if (myid == 0) fprintf(stderr, "RHS size overflow. n=%d nrhs=%d\n", (int)n, nrhs);
+      free(irn); free(jcn); free(a);
+      MPI_Finalize();
+      return 1;
+    }
+    rhs = (float *)malloc((size_t)rhs_size64 * sizeof(float));
+    rhs_ref = (float *)malloc((size_t)rhs_size64 * sizeof(float));
+    if (!rhs || !rhs_ref) {
+      if (myid == 0) fprintf(stderr, "Allocation failed.\n");
+      free(irn); free(jcn); free(a); free(rhs); free(rhs_ref);
+      MPI_Finalize();
+      return 1;
+    }
+    for (int64_t rhs_id = 0; rhs_id < rhs_size64; ++rhs_id) {
+      rhs[rhs_id] = 1.0f;
+      rhs_ref[rhs_id] = 1.0f;
+    }
     if (myid == 0) {
-      fprintf(stderr, "Problem too large for MUMPS integer type. ngrid=%d\n", ngrid);
+      printf("SMUMPS_BENCH_MATRIX_FILE=%s\n", matrix_file);
     }
-    MPI_Finalize();
-    return 1;
-  }
-  if (rhs_size64 <= 0 || (uint64_t)rhs_size64 > (SIZE_MAX / sizeof(float))) {
-    if (myid == 0) {
-      fprintf(stderr, "RHS size overflow. ngrid=%d nrhs=%d\n", ngrid, nrhs);
+  } else {
+    n64 = (int64_t)ngrid * (int64_t)ngrid;
+    nnz_max64 = 5LL * n64;
+    rhs_size64 = n64 * (int64_t)nrhs;
+    if (((MUMPS_INT)n64) != n64 || ((MUMPS_INT8)nnz_max64) != nnz_max64) {
+      if (myid == 0) {
+        fprintf(stderr, "Problem too large for MUMPS integer type. ngrid=%d\n", ngrid);
+      }
+      MPI_Finalize();
+      return 1;
     }
-    MPI_Finalize();
-    return 1;
-  }
-
-  n = (MUMPS_INT)n64;
-  nnz_max = (MUMPS_INT8)nnz_max64;
-
-  irn = (MUMPS_INT *)malloc((size_t)nnz_max * sizeof(MUMPS_INT));
-  jcn = (MUMPS_INT *)malloc((size_t)nnz_max * sizeof(MUMPS_INT));
-  a = (float *)malloc((size_t)nnz_max * sizeof(float));
-  rhs = (float *)malloc((size_t)rhs_size64 * sizeof(float));
-  rhs_ref = (float *)malloc((size_t)rhs_size64 * sizeof(float));
-  if (!irn || !jcn || !a || !rhs || !rhs_ref) {
-    if (myid == 0) fprintf(stderr, "Allocation failed.\n");
-    free(irn);
-    free(jcn);
-    free(a);
-    free(rhs);
-    free(rhs_ref);
-    MPI_Finalize();
-    return 1;
-  }
-
-  for (int64_t rhs_id = 0; rhs_id < rhs_size64; ++rhs_id) {
-    rhs[rhs_id] = 1.0f;
-    rhs_ref[rhs_id] = 1.0f;
-  }
-
-  for (i = 0; i < ngrid; ++i) {
-    for (j = 0; j < ngrid; ++j) {
-      MUMPS_INT row = (MUMPS_INT)(i * ngrid + j + 1);
-      irn[idx] = row; jcn[idx] = row; a[idx] = 4.0f; idx++;
-      if (i > 0)         { irn[idx] = row; jcn[idx] = row - ngrid; a[idx] = -1.0f; idx++; }
-      if (i < ngrid - 1) { irn[idx] = row; jcn[idx] = row + ngrid; a[idx] = -1.0f; idx++; }
-      if (j > 0)         { irn[idx] = row; jcn[idx] = row - 1;     a[idx] = -1.0f; idx++; }
-      if (j < ngrid - 1) { irn[idx] = row; jcn[idx] = row + 1;     a[idx] = -1.0f; idx++; }
+    if (rhs_size64 <= 0 || (uint64_t)rhs_size64 > (SIZE_MAX / sizeof(float))) {
+      if (myid == 0) {
+        fprintf(stderr, "RHS size overflow. ngrid=%d nrhs=%d\n", ngrid, nrhs);
+      }
+      MPI_Finalize();
+      return 1;
     }
+
+    n = (MUMPS_INT)n64;
+    nnz_max = (MUMPS_INT8)nnz_max64;
+
+    irn = (MUMPS_INT *)malloc((size_t)nnz_max * sizeof(MUMPS_INT));
+    jcn = (MUMPS_INT *)malloc((size_t)nnz_max * sizeof(MUMPS_INT));
+    a = (float *)malloc((size_t)nnz_max * sizeof(float));
+    rhs = (float *)malloc((size_t)rhs_size64 * sizeof(float));
+    rhs_ref = (float *)malloc((size_t)rhs_size64 * sizeof(float));
+    if (!irn || !jcn || !a || !rhs || !rhs_ref) {
+      if (myid == 0) fprintf(stderr, "Allocation failed.\n");
+      free(irn); free(jcn); free(a); free(rhs); free(rhs_ref);
+      MPI_Finalize();
+      return 1;
+    }
+
+    for (int64_t rhs_id = 0; rhs_id < rhs_size64; ++rhs_id) {
+      rhs[rhs_id] = 1.0f;
+      rhs_ref[rhs_id] = 1.0f;
+    }
+
+    for (i = 0; i < ngrid; ++i) {
+      for (j = 0; j < ngrid; ++j) {
+        MUMPS_INT row = (MUMPS_INT)(i * ngrid + j + 1);
+        irn[idx] = row; jcn[idx] = row; a[idx] = 4.0f; idx++;
+        if (i > 0)         { irn[idx] = row; jcn[idx] = row - ngrid; a[idx] = -1.0f; idx++; }
+        if (i < ngrid - 1) { irn[idx] = row; jcn[idx] = row + ngrid; a[idx] = -1.0f; idx++; }
+        if (j > 0)         { irn[idx] = row; jcn[idx] = row - 1;     a[idx] = -1.0f; idx++; }
+        if (j < ngrid - 1) { irn[idx] = row; jcn[idx] = row + 1;     a[idx] = -1.0f; idx++; }
+      }
+    }
+    nnz_final = (MUMPS_INT8)idx;
   }
-  nnz_final = (MUMPS_INT8)idx;
 
   id.comm_fortran = USE_COMM_WORLD;
   id.par = 1;
-  id.sym = 0;
+  id.sym = sym;
   id.job = JOB_INIT;
   smumps_c(&id);
 
