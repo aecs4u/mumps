@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+
+{% block title %}CLI Dashboard - MUMPS Benchmark Suite{% endblock %}
+
+{% block extra_head %}
+<style>
+  .flowchart-container {
+    overflow-x: auto;
+    padding: 24px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    text-align: center;
+    margin: 24px 0;
+  }
+
+  .flowchart-container svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .cli-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    margin: 24px 0;
+  }
+
+  .cli-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    transition: all 0.2s;
+  }
+
+  .cli-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border-color: #667eea;
+  }
+
+  .cli-card h4 {
+    margin: 0 0 8px;
+    color: #374151;
+    font-size: 1rem;
+  }
+
+  .cli-card .cli-cmd {
+    font-family: 'Consolas', 'Monaco', monospace;
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin: 8px 0;
+    display: block;
+  }
+
+  .cli-card .cli-desc {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin: 8px 0 12px;
+  }
+
+  .cli-card .btn-execute {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .cli-card .btn-execute:hover {
+    background: #5568d3;
+  }
+
+  .cli-card .btn-execute:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+
+  .cli-category {
+    margin-top: 32px;
+  }
+
+  .cli-category h3 {
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .terminal-output {
+    background: #1f2937;
+    color: #f9fafb;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85rem;
+    padding: 20px;
+    border-radius: 8px;
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    margin: 16px 0;
+  }
+
+  .terminal-output .line-error {
+    color: #fca5a5;
+  }
+
+  .terminal-output .line-warning {
+    color: #fcd34d;
+  }
+
+  .terminal-output .line-success {
+    color: #6ee7b7;
+  }
+
+  .job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .job-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .job-status.running {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  .job-status.completed {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .job-status.failed {
+    background: #fef2f2;
+    color: #991b1b;
+  }
+
+  .job-status.idle {
+    background: #f3f4f6;
+    color: #6b7280;
+  }
+
+  .recent-jobs-table {
+    width: 100%;
+    margin-top: 16px;
+  }
+
+  .param-select {
+    padding: 4px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    margin-right: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>CLI Dashboard</h1>
+  <p class="lead">
+    Execute MUMPS build, test, and benchmark commands via the web interface
+  </p>
+</div>
+
+<!-- Flowchart -->
+<div class="section">
+  <h2>Use Case Flowchart</h2>
+  <div class="flowchart-container">
+    {{ flowchart_svg | safe }}
+  </div>
+</div>
+
+<!-- Job Output Panel -->
+<div class="section" id="output-section" style="display: none;">
+  <div class="job-header">
+    <h2>Command Output</h2>
+    <span class="job-status idle" id="job-status">Idle</span>
+  </div>
+  <div class="terminal-output" id="terminal-output">Ready to execute commands...</div>
+</div>
+
+<!-- Build Commands -->
+<div class="cli-category">
+  <h3>Build</h3>
+  <div class="cli-grid">
+    <div class="cli-card">
+      <h4>Build All Libraries</h4>
+      <code class="cli-cmd">mumps build all --shared</code>
+      <p class="cli-desc">Build all 4 precisions (S/D/C/Z) as shared libraries</p>
+      <button class="btn-execute" onclick="executeCommand('build_all')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Build Single Precision</h4>
+      <code class="cli-cmd">mumps build library -p &lt;prec&gt; --shared</code>
+      <p class="cli-desc">Build MUMPS library for a specific precision</p>
+      <select class="param-select" id="build-precision">
+        <option value="s">Single (s)</option>
+        <option value="d" selected>Double (d)</option>
+        <option value="c">Complex (c)</option>
+        <option value="z">Complex Double (z)</option>
+      </select>
+      <button class="btn-execute" onclick="executeCommand('build_library', {precision: document.getElementById('build-precision').value})">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Build Examples</h4>
+      <code class="cli-cmd">mumps build examples -p d</code>
+      <p class="cli-desc">Build MUMPS example programs</p>
+      <button class="btn-execute" onclick="executeCommand('build_examples')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Build Benchmarks</h4>
+      <code class="cli-cmd">mumps build benchmarks -p d</code>
+      <p class="cli-desc">Build benchmark programs for performance testing</p>
+      <button class="btn-execute" onclick="executeCommand('build_benchmarks')">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test Commands -->
+<div class="cli-category">
+  <h3>Test</h3>
+  <div class="cli-grid">
+    <div class="cli-card">
+      <h4>Run Pytest Suite</h4>
+      <code class="cli-cmd">mumps test pytest</code>
+      <p class="cli-desc">Run Python test suite with pytest and store results</p>
+      <button class="btn-execute" onclick="executeCommand('test_pytest')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Test All Vendors</h4>
+      <code class="cli-cmd">mumps test vendors</code>
+      <p class="cli-desc">Run tests across all available BLAS vendor libraries</p>
+      <button class="btn-execute" onclick="executeCommand('test_vendors')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Fortran Tests</h4>
+      <code class="cli-cmd">mumps test fortran</code>
+      <p class="cli-desc">Run Fortran example test suite</p>
+      <button class="btn-execute" onclick="executeCommand('test_fortran')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>BLAS Correctness</h4>
+      <code class="cli-cmd">mumps test correctness</code>
+      <p class="cli-desc">Validate BLAS implementations for numerical correctness</p>
+      <button class="btn-execute" onclick="executeCommand('test_correctness')">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- Benchmark Commands -->
+<div class="cli-category">
+  <h3>Benchmark</h3>
+  <div class="cli-grid">
+    <div class="cli-card">
+      <h4>Sparse MUMPS Benchmark</h4>
+      <code class="cli-cmd">mumps benchmark sparse</code>
+      <p class="cli-desc">Run sparse MUMPS solver benchmark (JOB=6, all-in-one)</p>
+      <button class="btn-execute" onclick="executeCommand('benchmark_sparse')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Dense GEMM Benchmark</h4>
+      <code class="cli-cmd">mumps benchmark dense</code>
+      <p class="cli-desc">Run dense matrix-matrix multiplication benchmark</p>
+      <button class="btn-execute" onclick="executeCommand('benchmark_dense')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Full Benchmark Suite</h4>
+      <code class="cli-cmd">mumps benchmark all</code>
+      <p class="cli-desc">Run complete benchmark suite and store results in SQLite</p>
+      <button class="btn-execute" onclick="executeCommand('benchmark_all')">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- Vendor Commands -->
+<div class="cli-category">
+  <h3>Vendor Management</h3>
+  <div class="cli-grid">
+    <div class="cli-card">
+      <h4>Detect BLAS Libraries</h4>
+      <code class="cli-cmd">mumps vendor detect</code>
+      <p class="cli-desc">Detect all available BLAS libraries using pkg-config, ldconfig, and filesystem</p>
+      <button class="btn-execute" onclick="executeCommand('vendor_detect')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Vendor Status</h4>
+      <code class="cli-cmd">mumps vendor status</code>
+      <p class="cli-desc">Show vendor library build status</p>
+      <button class="btn-execute" onclick="executeCommand('vendor_status')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Rebuild Vendors</h4>
+      <code class="cli-cmd">mumps vendor rebuild</code>
+      <p class="cli-desc">Rebuild all vendor-specific MUMPS libraries with dynamic detection</p>
+      <button class="btn-execute" onclick="executeCommand('vendor_rebuild')">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- Info & Maintenance -->
+<div class="cli-category">
+  <h3>Info & Maintenance</h3>
+  <div class="cli-grid">
+    <div class="cli-card">
+      <h4>Build Configuration</h4>
+      <code class="cli-cmd">mumps info config</code>
+      <p class="cli-desc">Show current Makefile.inc build configuration</p>
+      <button class="btn-execute" onclick="executeCommand('info_config')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>System Information</h4>
+      <code class="cli-cmd">mumps info system</code>
+      <p class="cli-desc">Show system info, compilers, and detected BLAS libraries</p>
+      <button class="btn-execute" onclick="executeCommand('info_system')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Clean Build</h4>
+      <code class="cli-cmd">mumps clean</code>
+      <p class="cli-desc">Remove all build artifacts</p>
+      <button class="btn-execute" onclick="executeCommand('clean')">Execute</button>
+    </div>
+
+    <div class="cli-card">
+      <h4>Start Webapp</h4>
+      <code class="cli-cmd">mumps webapp start --port 9002</code>
+      <p class="cli-desc">Start the webapp dashboard server</p>
+      <button class="btn-execute" onclick="executeCommand('webapp_start')">Execute</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Jobs -->
+{% if recent_jobs %}
+<div class="section">
+  <h2>Recent Jobs</h2>
+  <div class="table-container">
+    <table class="data-table recent-jobs-table">
+      <thead>
+        <tr>
+          <th>Command</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in recent_jobs %}
+        <tr>
+          <td><code>{{ job.command }}</code></td>
+          <td>
+            <span class="job-status {{ job.status }}">{{ job.status }}</span>
+          </td>
+          <td class="muted-text">{{ job.started_at }}</td>
+          <td>{{ job.duration or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentJobId = null;
+let pollInterval = null;
+
+function executeCommand(command, params) {
+  const outputSection = document.getElementById('output-section');
+  const terminal = document.getElementById('terminal-output');
+  const statusEl = document.getElementById('job-status');
+
+  // Show output section
+  outputSection.style.display = 'block';
+  terminal.textContent = 'Starting command...\n';
+  statusEl.textContent = 'Running';
+  statusEl.className = 'job-status running';
+
+  // Disable all execute buttons
+  document.querySelectorAll('.btn-execute').forEach(btn => btn.disabled = true);
+
+  // Build request body
+  const body = { command: command };
+  if (params) {
+    body.params = params;
+  }
+
+  // Start the job
+  fetch('/api/cli/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  .then(response => response.json())
+  .then(data => {
+    currentJobId = data.job_id;
+    terminal.textContent = `Job ${currentJobId} started: ${data.command}\n\n`;
+
+    // Scroll to output
+    outputSection.scrollIntoView({ behavior: 'smooth' });
+
+    // Start polling
+    pollInterval = setInterval(pollStatus, 2000);
+  })
+  .catch(error => {
+    terminal.textContent = `Error: ${error.message}`;
+    statusEl.textContent = 'Failed';
+    statusEl.className = 'job-status failed';
+    document.querySelectorAll('.btn-execute').forEach(btn => btn.disabled = false);
+  });
+}
+
+function pollStatus() {
+  if (!currentJobId) return;
+
+  fetch(`/api/cli/status/${currentJobId}`)
+  .then(response => response.json())
+  .then(data => {
+    const terminal = document.getElementById('terminal-output');
+    const statusEl = document.getElementById('job-status');
+
+    // Update output
+    if (data.output) {
+      terminal.textContent = data.output;
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // Update status
+    if (data.status === 'completed') {
+      statusEl.textContent = 'Completed';
+      statusEl.className = 'job-status completed';
+      clearInterval(pollInterval);
+      document.querySelectorAll('.btn-execute').forEach(btn => btn.disabled = false);
+    } else if (data.status === 'failed') {
+      statusEl.textContent = 'Failed';
+      statusEl.className = 'job-status failed';
+      clearInterval(pollInterval);
+      document.querySelectorAll('.btn-execute').forEach(btn => btn.disabled = false);
+    }
+  })
+  .catch(() => {
+    clearInterval(pollInterval);
+    document.querySelectorAll('.btn-execute').forEach(btn => btn.disabled = false);
+  });
+}
+</script>
+{% endblock %}

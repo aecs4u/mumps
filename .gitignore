@@ -97,6 +97,9 @@ dkms.conf
 /benchmarks/mumps_benchmarks.sqlite
 /benchmarks/mumps_benchmarks.sqlite-journal
 
+# Test results database (DO track this)
+!/mumps.sqlite
+
 # Editor and IDE files
 *~
 *.swp

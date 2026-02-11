@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Test Session #{{ session.id }} - MUMPS Pytest Results{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/pytest">← Back to Test Sessions</a>
+</div>
+
+<div class="hero">
+  <h1>🧪 Test Session #{{ session.id }}</h1>
+  <p class="lead">
+    {{ session.timestamp }}
+    {% if session.blas_vendor %} - {{ session.blas_vendor }} vendor{% endif %}
+  </p>
+</div>
+
+<!-- Session Summary -->
+<div class="kpi-section">
+  <h2>📊 Session Summary</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card {% if (session.num_failed or 0) == 0 %}success{% else %}danger{% endif %}">
+      <div class="kpi-value">{{ session.num_passed or 0 }} / {{ session.num_tests or 0 }}</div>
+      <div class="kpi-label">Tests Passed</div>
+      <div class="kpi-progress">
+        <div class="progress-bar" style="width: {{ ((session.num_passed or 0) / (session.num_tests or 1) * 100) if (session.num_tests and session.num_tests > 0) else 0 }}%;"></div>
+      </div>
+      <div class="kpi-detail">
+        {{ "%.1f"|format(((session.num_passed or 0) / (session.num_tests or 1) * 100) if (session.num_tests and session.num_tests > 0) else 0) }}% pass rate
+      </div>
+    </div>
+
+    <div class="kpi-card {% if (session.num_failed or 0) > 0 %}warning{% else %}success{% endif %}">
+      <div class="kpi-value">{{ session.num_failed or 0 }}</div>
+      <div class="kpi-label">Failed Tests</div>
+      <div class="kpi-icon">{% if (session.num_failed or 0) > 0 %}✗{% else %}✓{% endif %}</div>
+    </div>
+
+    <div class="kpi-card info">
+      <div class="kpi-value">{{ session.num_skipped or 0 }}</div>
+      <div class="kpi-label">Skipped Tests</div>
+      <div class="kpi-icon">⏭️</div>
+    </div>
+
+    <div class="kpi-card primary">
+      <div class="kpi-value">{{ "%.2f"|format(session.total_duration or 0) }}s</div>
+      <div class="kpi-label">Total Duration</div>
+      <div class="kpi-icon">⏱️</div>
+    </div>
+  </div>
+
+  <!-- Environment Info -->
+  <div class="info-grid">
+    <div class="info-card">
+      <strong>Python Version:</strong> {{ session.python_version or 'N/A' }}
+    </div>
+    <div class="info-card">
+      <strong>Platform:</strong> {{ session.platform or 'Unknown' }}
+    </div>
+    <div class="info-card">
+      <strong>BLAS Vendor:</strong> {{ session.blas_vendor or 'default' }}
+    </div>
+  </div>
+</div>
+
+<!-- Failed Tests (if any) -->
+{% if failed_tests %}
+<div class="section alert-section danger">
+  <h2>❌ Failed Tests ({{ failed_tests|length }})</h2>
+  <div class="failed-tests-container">
+    {% for test in failed_tests %}
+    <div class="test-failure-card">
+      <div class="test-failure-header">
+        <h3>{{ test.test_name }}</h3>
+        <span class="badge danger">FAILED</span>
+      </div>
+      <div class="test-failure-details">
+        {% if test.test_file %}
+        <p><strong>File:</strong> <code>{{ test.test_file }}</code></p>
+        {% endif %}
+        {% if test.test_class %}
+        <p><strong>Class:</strong> <code>{{ test.test_class }}</code></p>
+        {% endif %}
+        {% if test.test_function %}
+        <p><strong>Function:</strong> <code>{{ test.test_function }}</code></p>
+        {% endif %}
+        {% if test.duration %}
+        <p><strong>Duration:</strong> {{ "%.3f"|format(test.duration) }}s</p>
+        {% endif %}
+      </div>
+      {% if test.error_message %}
+      <div class="test-error-message">
+        <strong>Error:</strong>
+        <pre><code>{{ test.error_message }}</code></pre>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Slow Tests -->
+{% if slow_tests %}
+<div class="section">
+  <h2>🐢 Slowest Tests (Top 10)</h2>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Test Name</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>File</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for test in slow_tests %}
+        <tr>
+          <td><code>{{ test.test_name }}</code></td>
+          <td>
+            <span class="badge {% if test.status == 'passed' %}success{% elif test.status == 'failed' %}danger{% else %}warning{% endif %}">
+              {{ test.status }}
+            </span>
+          </td>
+          <td><strong>{{ "%.3f"|format(test.duration) }}s</strong></td>
+          <td class="muted-text">{{ test.test_file or 'N/A' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- All Test Results -->
+<div class="section">
+  <h2>📋 All Test Results ({{ test_results|length }} tests)</h2>
+
+  <!-- Test Status Filter -->
+  <div class="filter-buttons">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="passed">Passed</button>
+    <button class="filter-btn" data-filter="failed">Failed</button>
+    <button class="filter-btn" data-filter="skipped">Skipped</button>
+  </div>
+
+  <div class="table-container">
+    <table class="data-table" id="test-results-table">
+      <thead>
+        <tr>
+          <th>Test Name</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Class</th>
+          <th>Function</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for test in test_results %}
+        <tr data-status="{{ test.status }}" class="{% if test.status == 'failed' %}row-danger{% endif %}">
+          <td><code>{{ test.test_name }}</code></td>
+          <td>
+            <span class="badge {% if test.status == 'passed' %}success{% elif test.status == 'failed' %}danger{% else %}warning{% endif %}">
+              {{ test.status }}
+            </span>
+          </td>
+          <td>
+            {% if test.duration %}
+              {{ "%.3f"|format(test.duration) }}s
+              {% if test.duration > 1.0 %}
+                <span class="badge warning-text">slow</span>
+              {% endif %}
+            {% else %}
+              N/A
+            {% endif %}
+          </td>
+          <td class="muted-text">{{ test.test_class or '-' }}</td>
+          <td class="muted-text">{{ test.test_function or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Simple test result filtering
+document.addEventListener('DOMContentLoaded', function() {
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  const tableRows = document.querySelectorAll('#test-results-table tbody tr');
+
+  filterButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      // Update active button
+      filterButtons.forEach(btn => btn.classList.remove('active'));
+      this.classList.add('active');
+
+      const filter = this.dataset.filter;
+
+      // Filter rows
+      tableRows.forEach(row => {
+        if (filter === 'all') {
+          row.style.display = '';
+        } else {
+          if (row.dataset.status === filter) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        }
+      });
+    });
+  });
+});
+</script>
+{% endblock %}

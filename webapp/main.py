@@ -457,6 +457,21 @@ async def benchmarks(request: Request) -> HTMLResponse:
         except sqlite3.DatabaseError:
             pass
 
+    # Load test matrix fixtures from fixtures.json
+    import json
+
+    fixtures_path = PROJECT_ROOT / "benchmarks" / "matrices" / "fixtures.json"
+    matrix_fixtures = []
+    total_matrices = 0
+    if fixtures_path.exists():
+        try:
+            with open(fixtures_path) as f:
+                fixtures_data = json.load(f)
+            matrix_fixtures = fixtures_data.get("fixtures", [])
+            total_matrices = sum(len(cat.get("matrices", [])) for cat in matrix_fixtures)
+        except (json.JSONDecodeError, OSError):
+            pass
+
     context = {
         "request": request,
         "results_dir": str(RESULTS_DIR),
@@ -464,6 +479,8 @@ async def benchmarks(request: Request) -> HTMLResponse:
         "sparse_execution_count": sparse_execution_count if sparse_execution_count > 0 else None,
         "dense_execution_count": dense_execution_count if dense_execution_count > 0 else None,
         "recent_runs": recent_runs,
+        "matrix_fixtures": matrix_fixtures,
+        "total_matrices": total_matrices,
     }
     return templates.TemplateResponse("benchmarks.html", context)
 
@@ -859,11 +876,516 @@ async def api_migration_status() -> JSONResponse:
     return JSONResponse(data)
 
 
+def _get_pytest_data() -> dict[str, Any]:
+    """Query pytest database for test sessions and aggregate statistics."""
+    pytest_db_path = PROJECT_ROOT / "mumps.sqlite"
+
+    if not pytest_db_path.exists():
+        return {
+            "sessions": [],
+            "latest_session": None,
+            "total_tests": 0,
+            "vendors": [],
+            "test_status": {"passed": 0, "failed": 0, "skipped": 0},
+        }
+
+    try:
+        conn = sqlite3.connect(pytest_db_path)
+        conn.row_factory = sqlite3.Row
+
+        # Query recent test sessions (last 50)
+        sessions_cursor = conn.execute(
+            """
+            SELECT id, timestamp, python_version, platform, blas_vendor,
+                   num_tests, num_passed, num_failed, num_skipped, total_duration
+            FROM test_sessions
+            ORDER BY timestamp DESC
+            LIMIT 50
+            """
+        )
+        sessions = [dict(row) for row in sessions_cursor.fetchall()]
+
+        # Get latest session
+        latest_session = sessions[0] if sessions else None
+
+        # Aggregate statistics across all sessions
+        stats_cursor = conn.execute(
+            """
+            SELECT
+                SUM(num_tests) as total_tests,
+                SUM(num_passed) as total_passed,
+                SUM(num_failed) as total_failed,
+                SUM(num_skipped) as total_skipped
+            FROM test_sessions
+            """
+        )
+        stats = dict(stats_cursor.fetchone())
+
+        # Get unique vendors
+        vendors_cursor = conn.execute(
+            """
+            SELECT DISTINCT blas_vendor
+            FROM test_sessions
+            WHERE blas_vendor IS NOT NULL
+            ORDER BY blas_vendor
+            """
+        )
+        vendors = [row[0] for row in vendors_cursor.fetchall()]
+
+        conn.close()
+
+        return {
+            "sessions": sessions,
+            "latest_session": latest_session,
+            "total_tests": stats.get("total_tests") or 0,
+            "vendors": vendors,
+            "test_status": {
+                "passed": stats.get("total_passed") or 0,
+                "failed": stats.get("total_failed") or 0,
+                "skipped": stats.get("total_skipped") or 0,
+            },
+        }
+    except (sqlite3.Error, KeyError) as e:
+        LOGGER.error(f"Error querying pytest database: {e}")
+        return {
+            "sessions": [],
+            "latest_session": None,
+            "total_tests": 0,
+            "vendors": [],
+            "test_status": {"passed": 0, "failed": 0, "skipped": 0},
+        }
+
+
+def _get_pytest_session_detail(session_id: int) -> dict[str, Any] | None:
+    """Query detailed test results for a specific session."""
+    pytest_db_path = PROJECT_ROOT / "mumps.sqlite"
+
+    if not pytest_db_path.exists():
+        return None
+
+    try:
+        conn = sqlite3.connect(pytest_db_path)
+        conn.row_factory = sqlite3.Row
+
+        # Query session metadata
+        session_cursor = conn.execute(
+            """
+            SELECT id, timestamp, python_version, platform, blas_vendor,
+                   num_tests, num_passed, num_failed, num_skipped, total_duration
+            FROM test_sessions
+            WHERE id = ?
+            """,
+            (session_id,)
+        )
+        session_row = session_cursor.fetchone()
+
+        if session_row is None:
+            conn.close()
+            return None
+
+        session = dict(session_row)
+
+        # Query all test results for this session
+        results_cursor = conn.execute(
+            """
+            SELECT id, test_name, test_file, test_class, test_function,
+                   status, duration, error_message, timestamp
+            FROM test_results
+            WHERE session_id = ?
+            ORDER BY test_name
+            """,
+            (session_id,)
+        )
+        test_results = [dict(row) for row in results_cursor.fetchall()]
+
+        # Identify failed tests
+        failed_tests = [test for test in test_results if test["status"] == "failed"]
+
+        # Identify slow tests (duration > 1 second)
+        slow_tests = [
+            test for test in test_results
+            if test["duration"] and test["duration"] > 1.0
+        ]
+        slow_tests.sort(key=lambda t: t["duration"] or 0, reverse=True)
+
+        conn.close()
+
+        return {
+            "session": session,
+            "test_results": test_results,
+            "failed_tests": failed_tests,
+            "slow_tests": slow_tests[:10],  # Top 10 slowest
+        }
+    except (sqlite3.Error, KeyError) as e:
+        LOGGER.error(f"Error querying pytest session {session_id}: {e}")
+        return None
+
+
+@app.get("/pytest", response_class=HTMLResponse)
+async def pytest_results(request: Request) -> HTMLResponse:
+    """Display pytest test results dashboard."""
+    pytest_data = await run_in_threadpool(_get_pytest_data)
+
+    context = {
+        "request": request,
+        "sessions": pytest_data["sessions"],
+        "latest_session": pytest_data["latest_session"],
+        "total_tests": pytest_data["total_tests"],
+        "vendors": pytest_data["vendors"],
+        "test_status": pytest_data["test_status"],
+    }
+    return templates.TemplateResponse("pytest.html", context)
+
+
+@app.get("/pytest/{session_id}", response_class=HTMLResponse)
+async def pytest_session_detail(request: Request, session_id: int) -> HTMLResponse:
+    """Display detailed results for a specific test session."""
+    session_data = await run_in_threadpool(_get_pytest_session_detail, session_id)
+
+    if session_data is None:
+        return templates.TemplateResponse(
+            "404.html",
+            {
+                "request": request,
+                "error": f"Test session {session_id} not found",
+                "details": "The requested test session does not exist in the database.",
+            },
+            status_code=404,
+        )
+
+    context = {
+        "request": request,
+        "session": session_data["session"],
+        "test_results": session_data["test_results"],
+        "failed_tests": session_data["failed_tests"],
+        "slow_tests": session_data["slow_tests"],
+    }
+    return templates.TemplateResponse("pytest_session.html", context)
+
+
+@app.get("/api/pytest", response_class=JSONResponse)
+async def api_pytest_results() -> JSONResponse:
+    """API endpoint for pytest results data."""
+    data = await run_in_threadpool(_get_pytest_data)
+    return JSONResponse(data)
+
+
+def _get_systems_data() -> dict[str, Any]:
+    """Query system information from pytest test sessions."""
+    pytest_db_path = PROJECT_ROOT / "mumps.sqlite"
+
+    if not pytest_db_path.exists():
+        return {"systems": [], "total_sessions": 0}
+
+    try:
+        conn = sqlite3.connect(pytest_db_path)
+        conn.row_factory = sqlite3.Row
+
+        # Get unique systems (based on platform + python_version)
+        systems_cursor = conn.execute(
+            """
+            SELECT DISTINCT
+                platform,
+                python_version,
+                COUNT(*) as session_count,
+                SUM(num_tests) as total_tests,
+                SUM(num_passed) as total_passed,
+                MIN(timestamp) as first_seen,
+                MAX(timestamp) as last_seen,
+                GROUP_CONCAT(DISTINCT blas_vendor) as blas_vendors
+            FROM test_sessions
+            WHERE platform IS NOT NULL
+            GROUP BY platform, python_version
+            ORDER BY last_seen DESC
+            """
+        )
+        systems = [dict(row) for row in systems_cursor.fetchall()]
+
+        # Get total session count
+        total_cursor = conn.execute("SELECT COUNT(*) as total FROM test_sessions")
+        total_sessions = dict(total_cursor.fetchone())["total"]
+
+        conn.close()
+
+        return {
+            "systems": systems,
+            "total_sessions": total_sessions,
+        }
+    except (sqlite3.Error, KeyError) as e:
+        LOGGER.error(f"Error querying systems data: {e}")
+        return {"systems": [], "total_sessions": 0}
+
+
+def _get_system_detail(platform: str, python_version: str) -> dict[str, Any] | None:
+    """Query detailed information for a specific system."""
+    pytest_db_path = PROJECT_ROOT / "mumps.sqlite"
+
+    if not pytest_db_path.exists():
+        return None
+
+    try:
+        conn = sqlite3.connect(pytest_db_path)
+        conn.row_factory = sqlite3.Row
+
+        # Get system summary
+        system_cursor = conn.execute(
+            """
+            SELECT
+                platform,
+                python_version,
+                COUNT(*) as session_count,
+                SUM(num_tests) as total_tests,
+                SUM(num_passed) as total_passed,
+                SUM(num_failed) as total_failed,
+                MIN(timestamp) as first_seen,
+                MAX(timestamp) as last_seen,
+                GROUP_CONCAT(DISTINCT blas_vendor) as blas_vendors
+            FROM test_sessions
+            WHERE platform = ? AND python_version = ?
+            GROUP BY platform, python_version
+            """,
+            (platform, python_version)
+        )
+        system_row = system_cursor.fetchone()
+
+        if system_row is None:
+            conn.close()
+            return None
+
+        system = dict(system_row)
+
+        # Get recent test sessions for this system
+        sessions_cursor = conn.execute(
+            """
+            SELECT id, timestamp, blas_vendor,
+                   num_tests, num_passed, num_failed, num_skipped, total_duration
+            FROM test_sessions
+            WHERE platform = ? AND python_version = ?
+            ORDER BY timestamp DESC
+            LIMIT 20
+            """,
+            (platform, python_version)
+        )
+        sessions = [dict(row) for row in sessions_cursor.fetchall()]
+
+        conn.close()
+
+        return {
+            "system": system,
+            "sessions": sessions,
+        }
+    except (sqlite3.Error, KeyError) as e:
+        LOGGER.error(f"Error querying system detail: {e}")
+        return None
+
+
+@app.get("/docs", response_class=HTMLResponse)
+async def documentation(request: Request) -> HTMLResponse:
+    """Display MUMPS project documentation."""
+    context = {
+        "request": request,
+    }
+    return templates.TemplateResponse("docs.html", context)
+
+
+@app.get("/systems", response_class=HTMLResponse)
+async def systems_list(request: Request) -> HTMLResponse:
+    """Display list of systems that have run MUMPS tests."""
+    systems_data = await run_in_threadpool(_get_systems_data)
+
+    context = {
+        "request": request,
+        "systems": systems_data["systems"],
+        "total_sessions": systems_data["total_sessions"],
+    }
+    return templates.TemplateResponse("systems.html", context)
+
+
+@app.get("/systems/{platform}/{python_version}", response_class=HTMLResponse)
+async def system_detail(request: Request, platform: str, python_version: str) -> HTMLResponse:
+    """Display detailed information for a specific system."""
+    system_data = await run_in_threadpool(_get_system_detail, platform, python_version)
+
+    if system_data is None:
+        return templates.TemplateResponse(
+            "404.html",
+            {
+                "request": request,
+                "error": f"System not found",
+                "details": f"No test sessions found for {platform} with Python {python_version}.",
+            },
+            status_code=404,
+        )
+
+    context = {
+        "request": request,
+        "system": system_data["system"],
+        "sessions": system_data["sessions"],
+    }
+    return templates.TemplateResponse("system_detail.html", context)
+
+
+# ── CLI Dashboard Routes ──────────────────────────────────────
+
+_cli_jobs: dict[str, dict[str, Any]] = {}
+_cli_jobs_lock = threading.Lock()
+
+_CLI_COMMANDS: dict[str, dict[str, Any]] = {
+    "build_all": {"label": "Build All Libraries", "cmd": ["make", "allshared"]},
+    "build_library": {"label": "Build Library", "cmd": ["make", "{precision}shared"]},
+    "build_examples": {"label": "Build Examples", "cmd": ["bash", "smart_build.sh", "examples", "d"]},
+    "build_benchmarks": {"label": "Build Benchmarks", "cmd": ["bash", "smart_build.sh", "benchmarks", "d"]},
+    "test_pytest": {"label": "Run Pytest", "cmd": ["python3", "-m", "pytest", "tests/", "-v", "--tb=short"]},
+    "test_vendors": {"label": "Test All Vendors", "cmd": ["bash", "scripts/test_all_vendors.sh"]},
+    "test_fortran": {"label": "Fortran Tests", "cmd": ["bash", "examples/run_all_tests.sh"]},
+    "test_correctness": {"label": "BLAS Correctness", "cmd": ["bash", "scripts/check_blas_correctness.sh"]},
+    "benchmark_sparse": {"label": "Sparse Benchmark", "cmd": ["bash", "scripts/benchmark_blas.sh"]},
+    "benchmark_dense": {"label": "Dense Benchmark", "cmd": ["bash", "scripts/benchmark_blas_dense.sh"]},
+    "benchmark_all": {"label": "Full Benchmark Suite", "cmd": ["bash", "scripts/run_all_benchmarks_to_sqlite.sh"]},
+    "vendor_detect": {"label": "Detect BLAS", "cmd": ["python3", "-m", "cli.lib_detect"]},
+    "vendor_status": {"label": "Vendor Status", "cmd": ["make", "vendor-status"]},
+    "vendor_rebuild": {"label": "Rebuild Vendors", "cmd": ["bash", "scripts/rebuild_vendor_libraries.sh"]},
+    "info_config": {"label": "Build Config", "cmd": ["make", "showconfig"]},
+    "info_system": {"label": "System Info", "cmd": ["uname", "-a"]},
+    "clean": {"label": "Clean Build", "cmd": ["make", "clean"]},
+    "webapp_start": {"label": "Start Webapp", "cmd": ["echo", "Webapp is already running"]},
+}
+
+
+def _execute_cli_job(job_id: str, command: str, params: dict[str, str] | None = None) -> None:
+    """Execute a CLI job in background thread."""
+    import time as _time
+
+    cmd_info = _CLI_COMMANDS.get(command)
+    if not cmd_info:
+        with _cli_jobs_lock:
+            _cli_jobs[job_id]["status"] = "failed"
+            _cli_jobs[job_id]["output"] = f"Unknown command: {command}"
+            _cli_jobs[job_id]["finished_at"] = _time.strftime("%Y-%m-%d %H:%M:%S")
+        return
+
+    cmd = list(cmd_info["cmd"])
+
+    # Apply parameter substitutions
+    if params:
+        cmd = [part.format(**params) if "{" in part else part for part in cmd]
+
+    env = os.environ.copy()
+    lib_path = f"{PROJECT_ROOT}/lib:{PROJECT_ROOT}/src/PORD/lib"
+    existing = env.get("LD_LIBRARY_PATH", "")
+    env["LD_LIBRARY_PATH"] = f"{lib_path}:{existing}" if existing else lib_path
+
+    output_lines: list[str] = []
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(PROJECT_ROOT),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        for line in proc.stdout:  # type: ignore[union-attr]
+            output_lines.append(line)
+            with _cli_jobs_lock:
+                _cli_jobs[job_id]["output"] = "".join(output_lines)
+
+        proc.wait()
+        status = "completed" if proc.returncode == 0 else "failed"
+    except Exception as exc:
+        output_lines.append(f"\nError: {exc}\n")
+        status = "failed"
+
+    with _cli_jobs_lock:
+        _cli_jobs[job_id]["status"] = status
+        _cli_jobs[job_id]["output"] = "".join(output_lines)
+        _cli_jobs[job_id]["finished_at"] = _time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # Auto-cleanup: keep max 50 jobs
+    with _cli_jobs_lock:
+        if len(_cli_jobs) > 50:
+            oldest = sorted(_cli_jobs.keys())[: len(_cli_jobs) - 50]
+            for k in oldest:
+                del _cli_jobs[k]
+
+
+@app.get("/cli", response_class=HTMLResponse)
+async def cli_dashboard(request: Request) -> HTMLResponse:
+    """CLI dashboard with flowchart and command execution."""
+    flowchart_svg = ""
+    try:
+        from cli.flowchart import generate_flowchart_svg
+        flowchart_svg = generate_flowchart_svg()
+    except Exception as exc:
+        LOGGER.warning(f"Could not generate flowchart: {exc}")
+        flowchart_svg = "<p>Flowchart unavailable (graphviz not installed?)</p>"
+
+    # Get recent jobs
+    with _cli_jobs_lock:
+        recent_jobs = sorted(
+            _cli_jobs.values(),
+            key=lambda j: j.get("started_at", ""),
+            reverse=True,
+        )[:10]
+
+    context = {
+        "request": request,
+        "flowchart_svg": flowchart_svg,
+        "recent_jobs": recent_jobs,
+    }
+    return templates.TemplateResponse("cli.html", context)
+
+
+@app.post("/api/cli/execute", response_class=JSONResponse)
+async def cli_execute(request: Request) -> JSONResponse:
+    """Start a background CLI job."""
+    body = await request.json()
+    command = body.get("command", "")
+    params = body.get("params")
+
+    if command not in _CLI_COMMANDS:
+        return JSONResponse({"error": f"Unknown command: {command}"}, status_code=400)
+
+    job_id = f"{int(time.time() * 1000)}"
+    label = _CLI_COMMANDS[command]["label"]
+
+    with _cli_jobs_lock:
+        _cli_jobs[job_id] = {
+            "id": job_id,
+            "command": label,
+            "status": "running",
+            "output": "",
+            "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": None,
+        }
+
+    thread = threading.Thread(
+        target=_execute_cli_job, args=(job_id, command, params), daemon=True
+    )
+    thread.start()
+
+    return JSONResponse({"job_id": job_id, "command": label, "status": "running"})
+
+
+@app.get("/api/cli/status/{job_id}", response_class=JSONResponse)
+async def cli_status(job_id: str) -> JSONResponse:
+    """Poll a CLI job status."""
+    with _cli_jobs_lock:
+        job = _cli_jobs.get(job_id)
+    if not job:
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+    return JSONResponse(job)
+
+
 @app.get("/health", response_class=JSONResponse)
 async def health() -> JSONResponse:
     """Health check endpoint for monitoring webapp status."""
     db_exists = DB_PATH.exists()
     results_dir_exists = RESULTS_DIR.exists()
+    pytest_db_path = PROJECT_ROOT / "mumps.sqlite"
+    pytest_db_exists = pytest_db_path.exists()
 
     return JSONResponse(
         {
@@ -875,6 +1397,10 @@ async def health() -> JSONResponse:
             "results_dir": {
                 "path": str(RESULTS_DIR),
                 "exists": results_dir_exists,
+            },
+            "pytest_database": {
+                "path": str(pytest_db_path),
+                "exists": pytest_db_exists,
             },
         }
     )

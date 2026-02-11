@@ -15,8 +15,8 @@ ISCOTCH   = -I/usr/include/scotch
 #LSCOTCH   = -L$(LSCOTCHDIR) -lptesmumps -lptscotch -lptscotcherr
 LSCOTCH   = -L$(LSCOTCHDIR) -lesmumps -lscotch -lscotcherr
 
-LPORDDIR = $(topdir)/PORD/lib/
-IPORD    = -I$(topdir)/PORD/include/
+LPORDDIR = $(topdir)/src/PORD/lib/
+IPORD    = -I$(topdir)/src/PORD/include/
 LPORD    = -L$(LPORDDIR) -lpord$(PLAT)
 
 LMETISDIR = /usr/lib 
@@ -185,8 +185,8 @@ LAPACK ?= $(DEFAULT_LAPACK)
 LIBBLAS ?= $(DEFAULT_LIBBLAS)
 LIBOTHERS ?= $(DEFAULT_LIBOTHERS)
 
-INCSEQ = -I$(topdir)/libseq
-LIBSEQ  = $(LAPACK) -L$(topdir)/libseq -lmpiseq$(PLAT)
+INCSEQ = -I$(topdir)/src/libseq
+LIBSEQ  = $(LAPACK) -L$(topdir)/src/libseq -lmpiseq$(PLAT)
 
 #Preprocessor defs for calling Fortran from C (-DAdd_ or -DAdd__ or -DUPPER)
 CDEFS   = -DAdd_

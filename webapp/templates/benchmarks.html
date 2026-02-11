@@ -39,9 +39,10 @@
     <div class="benchmark-config">
       <h4>Configuration</h4>
       <ul>
-        <li><strong>Test Matrix:</strong> 2D Laplacian (5-point stencil)</li>
+        <li><strong>Test Matrix:</strong> 2D Laplacian (5-point stencil) or any .coo fixture</li>
         <li><strong>Grid Size:</strong> Configurable (default: 220×220)</li>
         <li><strong>Right-Hand Sides:</strong> Configurable (default: 4)</li>
+        <li><strong>Fixtures:</strong> {{ total_matrices }} pre-generated .coo matrices (see below)</li>
         <li><strong>Metrics:</strong> Total time, analysis time, factorization time, solve time</li>
       </ul>
     </div>
@@ -119,6 +120,57 @@
       </ul>
     </div>
     <a href="/benchmarks/correctness" class="btn btn-secondary">View Details →</a>
+  </div>
+</div>
+
+<div class="info-section">
+  <h2>📁 Test Matrices ({{ total_matrices }} .coo files)</h2>
+  <p class="lead" style="margin-bottom: 24px;">
+    Pre-generated sparse matrices in MUMPS coordinate format (1-based indexing, symmetric positive definite).
+  </p>
+
+  {% for category in matrix_fixtures %}
+  <h3 style="margin-top: 24px; margin-bottom: 12px; text-transform: capitalize;">
+    {% if category.category == "small" %}🟢{% elif category.category == "medium" %}🟡{% elif category.category == "large" %}🟠{% elif category.category == "huge" %}🔴{% endif %}
+    {{ category.category }} matrices
+  </h3>
+  <table class="config-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>File</th>
+        <th>Type</th>
+        <th>Dimension</th>
+        <th>Non-zeros</th>
+        <th>Sparsity</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in category.matrices %}
+      <tr>
+        <td><strong>{{ m.name }}</strong></td>
+        <td><code>{{ m.file }}</code></td>
+        <td>
+          {% if m.type == "diagonal" %}<span class="badge badge-validation">Diagonal</span>
+          {% elif m.type == "tridiagonal" %}<span class="badge badge-sparse">Tridiagonal</span>
+          {% elif m.type == "laplacian_2d" %}<span class="badge badge-solver">2D Laplacian</span>
+          {% endif %}
+        </td>
+        <td>{{ "{:,}".format(m.n) }} &times; {{ "{:,}".format(m.n) }}</td>
+        <td>{{ "{:,}".format(m.nnz) }}</td>
+        <td>{{ "%.4f"|format(m.nnz / (m.n * m.n) * 100) }}%</td>
+        <td>{{ m.description }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <div class="command-example" style="margin-top: 24px;">
+    <h4>Generate Custom Matrices</h4>
+    <pre><code>python3 scripts/generate_test_matrices.py --size all              # Regenerate all fixtures
+python3 scripts/generate_test_matrices.py --type laplacian --ngrid 50  # Custom 2D Laplacian</code></pre>
   </div>
 </div>
 

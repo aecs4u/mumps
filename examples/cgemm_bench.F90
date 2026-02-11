@@ -8,6 +8,7 @@ program cgemm_bench
   integer :: argc
   character(len=64) :: arg, val
   complex(4), allocatable :: a(:,:), b(:,:), c(:,:)
+  real(4), allocatable :: a_real(:,:), a_imag(:,:), b_real(:,:), b_imag(:,:)
   complex(4) :: alpha, beta
   real(8) :: t0, t1, seconds, gflops
 
@@ -55,9 +56,18 @@ program cgemm_bench
   end if
 
   allocate(a(m, k), b(k, n), c(m, n))
-  call random_number(a)
-  call random_number(b)
+  allocate(a_real(m, k), a_imag(m, k), b_real(k, n), b_imag(k, n))
+
+  ! Initialize complex arrays with random values
+  call random_number(a_real)
+  call random_number(a_imag)
+  call random_number(b_real)
+  call random_number(b_imag)
+  a = cmplx(a_real, a_imag, kind=4)
+  b = cmplx(b_real, b_imag, kind=4)
   c = (0.0, 0.0)
+
+  deallocate(a_real, a_imag, b_real, b_imag)
 
   alpha = (1.0, 0.0)
   beta = (0.0, 0.0)

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}System: {{ system.platform }} - MUMPS Benchmark Suite{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="/systems">← Back to Systems</a>
+</div>
+
+<div class="hero">
+  <h1>🖥️ {{ system.platform }}</h1>
+  <p class="lead">
+    Python {{ system.python_version }} | {{ system.session_count }} test sessions
+  </p>
+</div>
+
+<!-- System Summary -->
+<div class="kpi-section">
+  <h2>📊 System Summary</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card primary">
+      <div class="kpi-value">{{ system.session_count }}</div>
+      <div class="kpi-label">Test Sessions</div>
+      <div class="kpi-icon">🧪</div>
+    </div>
+
+    <div class="kpi-card success">
+      <div class="kpi-value">{{ system.total_tests or 0 }}</div>
+      <div class="kpi-label">Total Tests Run</div>
+      <div class="kpi-icon">✓</div>
+    </div>
+
+    <div class="kpi-card info">
+      <div class="kpi-value">
+        {{ "%.1f"|format(((system.total_passed or 0) / (system.total_tests or 1) * 100) if (system.total_tests and system.total_tests > 0) else 0) }}%
+      </div>
+      <div class="kpi-label">Pass Rate</div>
+      <div class="kpi-progress">
+        {% set pass_rate = ((system.total_passed or 0) / (system.total_tests or 1) * 100) if (system.total_tests and system.total_tests > 0) else 0 %}
+        <div class="progress-bar {% if pass_rate >= 95 %}success{% elif pass_rate >= 80 %}warning{% else %}danger{% endif %}"
+             style="width: {{ pass_rate }}%;"></div>
+      </div>
+    </div>
+
+    <div class="kpi-card warning">
+      <div class="kpi-value">{{ system.total_failed or 0 }}</div>
+      <div class="kpi-label">Failed Tests</div>
+      <div class="kpi-icon">{% if (system.total_failed or 0) > 0 %}✗{% else %}✓{% endif %}</div>
+    </div>
+  </div>
+
+  <!-- System Info -->
+  <div class="info-grid">
+    <div class="info-card">
+      <strong>Platform:</strong> {{ system.platform }}
+    </div>
+    <div class="info-card">
+      <strong>Python Version:</strong> {{ system.python_version }}
+    </div>
+    <div class="info-card">
+      <strong>First Seen:</strong> {{ system.first_seen }}
+    </div>
+    <div class="info-card">
+      <strong>Last Seen:</strong> {{ system.last_seen }}
+    </div>
+  </div>
+
+  <!-- BLAS Vendors -->
+  {% if system.blas_vendors %}
+  <div class="vendor-section">
+    <h3>🔧 Tested BLAS Vendors</h3>
+    <div class="vendor-badges">
+      {% for vendor in system.blas_vendors.split(',') %}
+        <span class="vendor-badge">{{ vendor }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Recent Test Sessions -->
+<div class="section">
+  <h2>📋 Recent Test Sessions</h2>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>BLAS Vendor</th>
+          <th>Tests</th>
+          <th>Passed</th>
+          <th>Failed</th>
+          <th>Skipped</th>
+          <th>Duration</th>
+          <th>Pass Rate</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for session in sessions %}
+        <tr class="{% if (session.num_failed or 0) > 0 %}row-warning{% endif %}">
+          <td>{{ session.timestamp }}</td>
+          <td>
+            <span class="badge">{{ session.blas_vendor or 'default' }}</span>
+          </td>
+          <td>{{ session.num_tests or 0 }}</td>
+          <td class="success-text">{{ session.num_passed or 0 }}</td>
+          <td class="{% if (session.num_failed or 0) > 0 %}danger-text{% endif %}">
+            {{ session.num_failed or 0 }}
+          </td>
+          <td class="muted-text">{{ session.num_skipped or 0 }}</td>
+          <td>{{ "%.2f"|format(session.total_duration or 0) }}s</td>
+          <td>
+            <div class="progress-mini">
+              {% set pass_rate = ((session.num_passed or 0) / (session.num_tests or 1) * 100) if (session.num_tests and session.num_tests > 0) else 0 %}
+              <div class="progress-bar-mini {% if (session.num_failed or 0) > 0 %}warning{% else %}success{% endif %}"
+                   style="width: {{ pass_rate }}%;">
+              </div>
+            </div>
+            <span class="progress-label-mini">
+              {{ "%.1f"|format(pass_rate) }}%
+            </span>
+          </td>
+          <td>
+            <a href="/pytest/{{ session.id }}" class="btn btn-sm btn-primary">View Details</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- System Information -->
+<div class="section help-section">
+  <h2>ℹ️ System Information</h2>
+  <div class="help-content">
+    <p>
+      This system has been automatically registered through pytest test runs.
+      All test results from this platform and Python version combination are tracked here.
+    </p>
+
+    <h3>Understanding Platform Identifiers</h3>
+    <p>
+      The platform string typically includes:
+    </p>
+    <ul>
+      <li><strong>OS:</strong> Linux, Darwin (macOS), Windows</li>
+      <li><strong>Kernel Version:</strong> e.g., 6.17.0-14-generic</li>
+      <li><strong>Architecture:</strong> x86_64, arm64, etc.</li>
+    </ul>
+
+    <h3>Running More Tests</h3>
+    <pre><code># Run tests with default BLAS
+./scripts/run_tests.sh
+
+# Run tests with all available BLAS vendors
+./scripts/test_all_vendors.sh
+
+# Rebuild vendor libraries
+./scripts/rebuild_vendor_libraries.sh</code></pre>
+  </div>
+</div>
+
+{% endblock %}

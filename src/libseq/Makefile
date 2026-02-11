@@ -6,7 +6,7 @@ all: staticlibmpiseq
 
 .PHONY: all staticlibmpiseq sharedlibmpiseq clean
 
-topdir = ..
+topdir = ../..
 include $(topdir)/Makefile.inc
 
 # Override OPTF to use legacy mode for libseq (fixed-form compatibility)

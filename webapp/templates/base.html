@@ -17,9 +17,12 @@
           <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">Home</a>
           <a href="/results" class="{% if request.url.path == '/results' %}active{% endif %}">Results</a>
           <a href="/benchmarks" class="{% if request.url.path.startswith('/benchmarks') %}active{% endif %}">Benchmarks</a>
+          <a href="/pytest" class="{% if request.url.path.startswith('/pytest') %}active{% endif %}">Pytest</a>
+          <a href="/systems" class="{% if request.url.path.startswith('/systems') %}active{% endif %}">Systems</a>
           <a href="/modules" class="{% if request.url.path == '/modules' %}active{% endif %}">Modules</a>
           <a href="/migration" class="{% if request.url.path == '/migration' %}active{% endif %}">Migration</a>
-          <a href="/health" class="{% if request.url.path == '/health' %}active{% endif %}">Health</a>
+          <a href="/cli" class="{% if request.url.path == '/cli' %}active{% endif %}">CLI</a>
+          <a href="/docs" class="{% if request.url.path == '/docs' %}active{% endif %}">Docs</a>
         </div>
       </div>
     </nav>

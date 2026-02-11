@@ -161,7 +161,8 @@ OBJS_MOD_ARITHDEP = \
         $(ARITH)omp_tps_m.o\
         $(ARITH)sol_lr.o\
         $(ARITH)sol_omp_m.o\
-        $(ARITH)static_ptr_m.o
+        $(ARITH)static_ptr_m.o\
+        $(ARITH)mumps_c_interface.o
 
 OBJS_OTHER = \
         $(ARITH)ana_aux_ELT.o\

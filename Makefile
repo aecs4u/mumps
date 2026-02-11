@@ -122,13 +122,13 @@ prerequisitesshared: Makefile.inc $(LIBSEQNEEDED)sharedlibseq $(libdir)/libpord$
 sharedlibseq:
 
 libseqneeded:
-	(cd libseq; $(MAKE))
-	(cp libseq/libmpiseq$(PLAT)$(LIBEXT) $(libdir))
+	(cd src/libseq; $(MAKE))
+	(cp src/libseq/libmpiseq$(PLAT)$(LIBEXT) $(libdir))
 
 libseqneededsharedlibseq:
-	(cd libseq; $(MAKE) sharedlibmpiseq)
-	if [ -f libseq/libmpiseq$(PLAT)$(LIBEXT) ]; then cp libseq/libmpiseq$(PLAT)$(LIBEXT) $(libdir); fi
-	(cp libseq/libmpiseq$(PLAT)$(LIBEXT_SHARED) $(libdir))
+	(cd src/libseq; $(MAKE) sharedlibmpiseq)
+	if [ -f src/libseq/libmpiseq$(PLAT)$(LIBEXT) ]; then cp src/libseq/libmpiseq$(PLAT)$(LIBEXT) $(libdir); fi
+	(cp src/libseq/libmpiseq$(PLAT)$(LIBEXT_SHARED) $(libdir))
 
 # Build the libpord.a library and copy it into $(topdir)/lib
 $(libdir)/libpord$(PLAT)$(LIBEXT):
@@ -157,7 +157,7 @@ clean:
 	(cd examples; $(MAKE) clean)
 	(cd $(libdir); $(RM) lib*$(PLAT)$(LIBEXT) lib*$(PLAT)$(LIBEXT_SHARED))
 	($(RM) $(PKGCONFIG_FILES))
-	(cd libseq; $(MAKE) clean)
+	(cd src/libseq; $(MAKE) clean)
 	if [ "$(LPORDDIR)" != "" ] ; then \
 	  cd $(LPORDDIR); $(MAKE) CC="$(CC)" CFLAGS="$(OPTC)" AR="$(AR)" RANLIB="$(RANLIB)" OUTC="$(OUTC)" LIBEXT="$(LIBEXT)" LIBEXT_SHARED="$(LIBEXT_SHARED)" PLAT="$(PLAT)" realclean; \
         fi;
@@ -167,7 +167,7 @@ clean-build:
 	(cd src; $(MAKE) clean)
 	(cd examples; $(MAKE) clean)
 	(cd $(libdir); $(RM) lib*$(PLAT)$(LIBEXT) lib*$(PLAT)$(LIBEXT_SHARED))
-	(cd libseq; $(MAKE) clean)
+	(cd src/libseq; $(MAKE) clean)
 
 distclean: clean cache-clean
 

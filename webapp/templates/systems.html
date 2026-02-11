@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Test Systems - MUMPS Benchmark Suite{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>🖥️ Test Systems</h1>
+  <p class="lead">
+    Systems that have run MUMPS tests and benchmarks
+  </p>
+</div>
+
+<!-- Summary -->
+{% if systems %}
+<div class="kpi-section">
+  <h2>📊 Summary</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card primary">
+      <div class="kpi-value">{{ systems|length }}</div>
+      <div class="kpi-label">Unique Systems</div>
+      <div class="kpi-icon">🖥️</div>
+    </div>
+
+    <div class="kpi-card info">
+      <div class="kpi-value">{{ total_sessions }}</div>
+      <div class="kpi-label">Total Test Sessions</div>
+      <div class="kpi-icon">🧪</div>
+    </div>
+
+    <div class="kpi-card success">
+      <div class="kpi-value">{{ (systems | map(attribute='total_tests') | sum) or 0 }}</div>
+      <div class="kpi-label">Total Tests Run</div>
+      <div class="kpi-icon">✓</div>
+    </div>
+
+    <div class="kpi-card warning">
+      <div class="kpi-value">{{ (systems | selectattr('blas_vendors') | list | length) }}</div>
+      <div class="kpi-label">Systems with BLAS Vendors</div>
+      <div class="kpi-icon">⚡</div>
+    </div>
+  </div>
+</div>
+
+<!-- Systems List -->
+<div class="section">
+  <h2>🖥️ Registered Systems</h2>
+  <div class="table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Platform</th>
+          <th>Python Version</th>
+          <th>Test Sessions</th>
+          <th>Tests Run</th>
+          <th>Pass Rate</th>
+          <th>BLAS Vendors</th>
+          <th>First Seen</th>
+          <th>Last Seen</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for system in systems %}
+        <tr>
+          <td>
+            <strong>{{ system.platform or 'Unknown' }}</strong>
+          </td>
+          <td>
+            <span class="badge">Python {{ system.python_version or 'N/A' }}</span>
+          </td>
+          <td>{{ system.session_count }}</td>
+          <td>{{ system.total_tests or 0 }}</td>
+          <td>
+            {% set pass_rate = ((system.total_passed or 0) / (system.total_tests or 1) * 100) if (system.total_tests and system.total_tests > 0) else 0 %}
+            <div class="progress-mini">
+              <div class="progress-bar-mini {% if pass_rate >= 95 %}success{% elif pass_rate >= 80 %}warning{% else %}danger{% endif %}"
+                   style="width: {{ pass_rate }}%;">
+              </div>
+            </div>
+            <span class="progress-label-mini">{{ "%.1f"|format(pass_rate) }}%</span>
+          </td>
+          <td>
+            {% if system.blas_vendors %}
+              {% for vendor in system.blas_vendors.split(',') %}
+                <span class="badge vendor-badge-sm">{{ vendor }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="muted-text">-</span>
+            {% endif %}
+          </td>
+          <td class="muted-text">{{ system.first_seen[:10] }}</td>
+          <td>{{ system.last_seen[:10] }}</td>
+          <td>
+            <a href="/systems/{{ system.platform }}/{{ system.python_version }}"
+               class="btn btn-sm btn-primary">View Details</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert info">
+  <p><strong>No systems registered yet.</strong></p>
+  <p>Run tests to register this system:</p>
+  <pre><code>./scripts/run_tests.sh</code></pre>
+</div>
+{% endif %}
+
+<!-- Help Section -->
+<div class="section help-section">
+  <h2>ℹ️ About System Tracking</h2>
+  <div class="help-content">
+    <p>
+      Systems are automatically registered when running pytest tests. Each unique combination of
+      <strong>platform</strong> and <strong>Python version</strong> is tracked separately.
+    </p>
+
+    <h3>Tracked Information</h3>
+    <ul>
+      <li><strong>Platform:</strong> Operating system and architecture (e.g., Linux-6.17.0-14-generic-x86_64)</li>
+      <li><strong>Python Version:</strong> Python interpreter version used for tests</li>
+      <li><strong>BLAS Vendors:</strong> Which BLAS implementations have been tested</li>
+      <li><strong>Test Statistics:</strong> Number of sessions, tests run, pass rates</li>
+      <li><strong>Timeline:</strong> When system was first and last seen</li>
+    </ul>
+
+    <h3>Registering Your System</h3>
+    <pre><code># Build MUMPS and run tests
+make allshared
+./scripts/run_tests.sh
+
+# View registered systems
+xdg-open http://localhost:8000/systems</code></pre>
+  </div>
+</div>
+
+{% endblock %}

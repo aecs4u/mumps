@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}MUMPS Documentation - Overview & Guides{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <h1>📚 MUMPS Documentation</h1>
+  <p class="lead">
+    Comprehensive documentation for MUMPS sparse solver, benchmarking suite, and Python interface
+  </p>
+</div>
+
+<!-- Quick Links -->
+<div class="section">
+  <h2>📖 Documentation Resources</h2>
+  <div class="docs-grid">
+    <div class="doc-card">
+      <h3>🔬 MUMPS Solver</h3>
+      <p>Direct solver for large sparse linear systems</p>
+      <ul>
+        <li><a href="#mumps-overview">Overview & Features</a></li>
+        <li><a href="#mumps-control">Control Parameters (ICNTL)</a></li>
+        <li><a href="#mumps-info">Info Parameters</a></li>
+        <li><a href="http://mumps.enseeiht.fr/doc/userguide_5.8.2.pdf" target="_blank">Official User Guide (PDF)</a></li>
+      </ul>
+    </div>
+
+    <div class="doc-card">
+      <h3>🐍 Python Interface</h3>
+      <p>ctypes-based Python bindings with scipy validation</p>
+      <ul>
+        <li><a href="/pytest" target="_blank">Test Results Dashboard</a></li>
+        <li><a href="#python-quickstart">Quick Start Guide</a></li>
+        <li><a href="#python-api">API Reference</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/python/README.md" target="_blank">Python README</a></li>
+      </ul>
+    </div>
+
+    <div class="doc-card">
+      <h3>⚡ Benchmarking Suite</h3>
+      <p>Performance testing across BLAS vendors and precisions</p>
+      <ul>
+        <li><a href="/benchmarks" target="_blank">Available Benchmarks</a></li>
+        <li><a href="/results" target="_blank">Benchmark Results</a></li>
+        <li><a href="#vendor-testing">Vendor Testing Guide</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/TESTING.md" target="_blank">TESTING.md</a></li>
+      </ul>
+    </div>
+
+    <div class="doc-card">
+      <h3>🛠️ Build & Development</h3>
+      <p>Building MUMPS with different configurations</p>
+      <ul>
+        <li><a href="#build-shared">Building Shared Libraries</a></li>
+        <li><a href="/migration" target="_blank">Fortran 2023 Migration</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/Makefile.inc" target="_blank">Makefile.inc Template</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/MODERNIZATION_STATUS.md" target="_blank">Modernization Status</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- MUMPS Overview -->
+<div class="section" id="mumps-overview">
+  <h2>🔬 MUMPS Overview</h2>
+  <div class="content-box">
+    <p>
+      <strong>MUMPS</strong> (MUltifrontal Massively Parallel Sparse direct Solver) is a package for solving large sparse
+      linear systems of equations <code>Ax = b</code> using direct methods.
+    </p>
+
+    <h3>Key Features</h3>
+    <ul>
+      <li><strong>Multiple Arithmetic Types:</strong> Real (single/double), Complex (single/double)</li>
+      <li><strong>Symmetric Support:</strong> Unsymmetric, symmetric positive definite, general symmetric</li>
+      <li><strong>Parallel Processing:</strong> MPI-based distributed memory parallelism</li>
+      <li><strong>Ordering Libraries:</strong> AMD, METIS, SCOTCH, PORD, PT-SCOTCH</li>
+      <li><strong>Out-of-Core:</strong> Handle problems larger than available RAM</li>
+      <li><strong>Schur Complement:</strong> Compute and manipulate Schur complements</li>
+    </ul>
+
+    <h3>Supported Precisions</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Prefix</th>
+          <th>Type</th>
+          <th>Fortran Type</th>
+          <th>Library</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>S</code></td>
+          <td>Single Precision Real</td>
+          <td><code>REAL</code></td>
+          <td><code>libsmumps.so</code></td>
+        </tr>
+        <tr>
+          <td><code>D</code></td>
+          <td>Double Precision Real</td>
+          <td><code>DOUBLE PRECISION</code></td>
+          <td><code>libdmumps.so</code></td>
+        </tr>
+        <tr>
+          <td><code>C</code></td>
+          <td>Single Precision Complex</td>
+          <td><code>COMPLEX</code></td>
+          <td><code>libcmumps.so</code></td>
+        </tr>
+        <tr>
+          <td><code>Z</code></td>
+          <td>Double Precision Complex</td>
+          <td><code>COMPLEX*16</code></td>
+          <td><code>libzmumps.so</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Python Quick Start -->
+<div class="section" id="python-quickstart">
+  <h2>🐍 Python Interface Quick Start</h2>
+  <div class="content-box">
+    <h3>Installation</h3>
+    <pre><code># 1. Build MUMPS shared libraries
+make allshared
+
+# 2. Set library paths
+export LD_LIBRARY_PATH="$(pwd)/lib:$(pwd)/src/PORD/lib:$LD_LIBRARY_PATH"
+
+# 3. Install Python dependencies
+uv pip install numpy scipy pytest</code></pre>
+
+    <h3>Basic Usage</h3>
+    <pre><code>from pymumps import solve_system
+import scipy.sparse as sp
+import numpy as np
+
+# Create a sparse matrix (COO format)
+A = sp.eye(100, format='coo') * 2.0
+b = np.ones(100)
+
+# Solve Ax = b
+x = solve_system(A, b)
+
+print(f"Solution: {x[:5]}...")  # [0.5, 0.5, 0.5, ...]</code></pre>
+
+    <h3>Running Tests</h3>
+    <pre><code># Test with default BLAS
+./scripts/run_tests.sh
+
+# Test all available BLAS vendors
+./scripts/test_all_vendors.sh
+
+# View results
+python3 -c "import sqlite3; conn = sqlite3.connect('mumps.sqlite');
+print(conn.execute('SELECT * FROM test_sessions ORDER BY id DESC LIMIT 1').fetchone())"</code></pre>
+  </div>
+</div>
+
+<!-- Vendor Testing -->
+<div class="section" id="vendor-testing">
+  <h2>🔧 BLAS Vendor Testing</h2>
+  <div class="content-box">
+    <h3>Available BLAS Vendors</h3>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Vendor</th>
+          <th>Description</th>
+          <th>Installation</th>
+          <th>Performance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Reference BLAS</strong></td>
+          <td>Netlib reference implementation</td>
+          <td><code>apt install libblas-dev liblapack-dev</code></td>
+          <td>⭐ Baseline (not optimized)</td>
+        </tr>
+        <tr>
+          <td><strong>OpenBLAS</strong></td>
+          <td>Optimized open-source BLAS</td>
+          <td><code>apt install libopenblas-dev</code></td>
+          <td>⭐⭐⭐ Good general performance</td>
+        </tr>
+        <tr>
+          <td><strong>AMD BLIS</strong></td>
+          <td>AMD-optimized BLAS-like library</td>
+          <td><code>git clone https://github.com/flame/blis && make</code></td>
+          <td>⭐⭐⭐⭐ Excellent on AMD CPUs</td>
+        </tr>
+        <tr>
+          <td><strong>Intel MKL</strong></td>
+          <td>Intel Math Kernel Library</td>
+          <td><a href="https://www.intel.com/mkl">intel.com/mkl</a></td>
+          <td>⭐⭐⭐⭐⭐ Best on Intel CPUs</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Rebuilding Vendor Libraries</h3>
+    <pre><code># Auto-detect and rebuild all available vendors
+./scripts/rebuild_vendor_libraries.sh
+
+# Test rebuilt libraries
+./scripts/test_all_vendors.sh
+
+# Compare performance
+./scripts/compare_vendors.sh</code></pre>
+
+    <p>See <a href="file:///mnt/developer/git/aecs4u.it/mumps/VENDOR_TESTING.md" target="_blank">VENDOR_TESTING.md</a> for detailed instructions.</p>
+  </div>
+</div>
+
+<!-- Build Instructions -->
+<div class="section" id="build-shared">
+  <h2>🛠️ Building Shared Libraries</h2>
+  <div class="content-box">
+    <h3>Basic Build</h3>
+    <pre><code># Build all 4 precisions (S/D/C/Z) with shared libraries
+make allshared
+
+# Build specific precision
+make dshared    # Double precision real only</code></pre>
+
+    <h3>Custom BLAS Configuration</h3>
+    <pre><code># Build with OpenBLAS
+make allshared LIBBLAS="-L/usr/lib/x86_64-linux-gnu/openblas-pthread -lopenblas"
+
+# Build with BLIS
+make allshared LIBBLAS="-L/usr/local/lib -lblis-mt"
+
+# Build with Intel MKL
+make allshared LIBBLAS="-L$MKLROOT/lib/intel64 -lmkl_rt"</code></pre>
+
+    <h3>Generated Libraries</h3>
+    <pre><code>lib/
+├── libdmumps.so         # Double precision real
+├── libsmumps.so         # Single precision real
+├── libcmumps.so         # Single precision complex
+├── libzmumps.so         # Double precision complex
+├── libmumps_common.so   # Common routines
+├── libmpiseq.so         # Sequential MPI stubs
+└── libpord.so           # PORD ordering library</code></pre>
+  </div>
+</div>
+
+<!-- Control Parameters -->
+<div class="section" id="mumps-control">
+  <h2>⚙️ Key Control Parameters</h2>
+  <div class="content-box">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ICNTL</th>
+          <th>Description</th>
+          <th>Values</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>ICNTL(1-3)</strong></td>
+          <td>Output streams (error, diagnostic, global)</td>
+          <td>-1 = suppress, 6 = stdout</td>
+        </tr>
+        <tr>
+          <td><strong>ICNTL(4)</strong></td>
+          <td>Print level</td>
+          <td>0 = none, 1 = errors, 2 = warnings, 3 = diagnostics, 4 = full</td>
+        </tr>
+        <tr>
+          <td><strong>ICNTL(7)</strong></td>
+          <td>Ordering strategy</td>
+          <td>0 = AMD, 2 = AMF, 3 = SCOTCH, 4 = PORD, 5 = METIS, 6 = PT-SCOTCH, 7 = auto</td>
+        </tr>
+        <tr>
+          <td><strong>ICNTL(8)</strong></td>
+          <td>Scaling strategy</td>
+          <td>-2 to 8, default = 77 (auto)</td>
+        </tr>
+        <tr>
+          <td><strong>ICNTL(18)</strong></td>
+          <td>Matrix distribution</td>
+          <td>0 = centralized, 3 = distributed</td>
+        </tr>
+        <tr>
+          <td><strong>ICNTL(22)</strong></td>
+          <td>Out-of-core factorization</td>
+          <td>0 = in-core, 1 = out-of-core</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Python Example</h3>
+    <pre><code>from pymumps import MUMPS
+
+with MUMPS(n=1000, sym=0) as mumps:
+    mumps.set_icntl(1, -1)  # Suppress output
+    mumps.set_icntl(7, 5)   # Use METIS ordering
+    mumps.set_matrix(irn, jcn, a)
+    mumps.set_rhs(b)
+    mumps.analyze()
+    mumps.factorize()
+    mumps.solve()
+    x = mumps.get_solution()</code></pre>
+  </div>
+</div>
+
+<!-- Additional Resources -->
+<div class="section">
+  <h2>🔗 Additional Resources</h2>
+  <div class="resources-grid">
+    <div class="resource-card">
+      <h4>📁 Project Files</h4>
+      <ul>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/README.md" target="_blank">README.md</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/TESTING.md" target="_blank">TESTING.md</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/VENDOR_TESTING.md" target="_blank">VENDOR_TESTING.md</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/PYTHON_INTERFACE_STATUS.md" target="_blank">PYTHON_INTERFACE_STATUS.md</a></li>
+        <li><a href="file:///mnt/developer/git/aecs4u.it/mumps/MODERNIZATION_STATUS.md" target="_blank">MODERNIZATION_STATUS.md</a></li>
+      </ul>
+    </div>
+
+    <div class="resource-card">
+      <h4>🌐 External Links</h4>
+      <ul>
+        <li><a href="http://mumps.enseeiht.fr/" target="_blank">MUMPS Official Website</a></li>
+        <li><a href="http://mumps.enseeiht.fr/doc/userguide_5.8.2.pdf" target="_blank">User Guide (PDF)</a></li>
+        <li><a href="https://github.com/scivision/mumps" target="_blank">MUMPS on GitHub</a></li>
+        <li><a href="https://www.openblas.net/" target="_blank">OpenBLAS</a></li>
+        <li><a href="https://github.com/flame/blis" target="_blank">BLIS</a></li>
+      </ul>
+    </div>
+
+    <div class="resource-card">
+      <h4>📊 Dashboards</h4>
+      <ul>
+        <li><a href="/" target="_blank">Home</a></li>
+        <li><a href="/benchmarks" target="_blank">Benchmarks</a></li>
+        <li><a href="/results" target="_blank">Results</a></li>
+        <li><a href="/pytest" target="_blank">Pytest Results</a></li>
+        <li><a href="/systems" target="_blank">Test Systems</a></li>
+        <li><a href="/migration" target="_blank">Migration Status</a></li>
+        <li><a href="/cli" target="_blank">CLI Dashboard</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
