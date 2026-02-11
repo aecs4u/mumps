@@ -225,8 +225,8 @@ else
 endif
 
 # Fortran:
-#   fixed-form legacy core keeps legacy mode for compatibility.
-#   free-form (.F90) uses modern standard where available.
+#   .F files use legacy fixed-form mode for compatibility.
+#   .f90 files use modern F2023 standard.
 FORTRAN_FIXED_STD_MODE ?= legacy
 ifeq ($(FORTRAN_FIXED_STD_MODE),none)
   FORTRAN_FIXED_STD_FLAG :=

@@ -9,6 +9,9 @@ all: staticlibmpiseq
 topdir = ..
 include $(topdir)/Makefile.inc
 
+# Override OPTF to use legacy mode for libseq (fixed-form compatibility)
+OPTF_LIBSEQ = $(OPTF_BASE) -std=legacy $(FORTRAN_COMPAT_FLAGS)
+
 staticlibmpiseq: libmpiseq$(PLAT)$(LIBEXT)
 
 libmpiseq$(PLAT)$(LIBEXT): mpi.o mpic.o elapse.o
@@ -22,7 +25,7 @@ libmpiseq$(PLAT)$(LIBEXT_SHARED): mpi.o mpic.o elapse.o
 	$(FC) $(SHARED_OPT) mpi.o mpic.o elapse.o -o libmpiseq$(PLAT)$(LIBEXT_SHARED)
 
 .f.o:
-	$(FC) $(OPTF) $(FPIC)              -c $*.f $(OUTF)$*.o
+	$(FC) $(OPTF_LIBSEQ) $(FPIC)              -c $*.f $(OUTF)$*.o
 .c.o:
 	$(CC) $(OPTC) $(FPIC) $(CDEFS) -I. -c $*.c $(OUTC)$*.o
 
