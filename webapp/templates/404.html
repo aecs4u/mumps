@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Not Found | MUMPS Benchmark Suite{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h1>Not Found</h1>
+  <p>{{ error or "The requested resource was not found." }}</p>
+  {% if benchmark_code %}
+  <p>Benchmark code: <code>{{ benchmark_code }}</code></p>
+  {% endif %}
+  <p><a href="/benchmarks">Back to Benchmarks</a></p>
+</section>
+{% endblock %}
